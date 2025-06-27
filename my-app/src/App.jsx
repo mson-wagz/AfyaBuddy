@@ -252,6 +252,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
     return () => clearInterval(interval)
   }, [])
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const triggerEmergencySOS = () => {
     setEmergencyPulse(true)
 
@@ -778,7 +779,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
   }
 
   // Example: Use getTranslation to fetch a translated title and display it
-  const [ setTranslatedTitle] = useState(translations[selectedLanguage]?.title || translations.en.title)
+  const [, setTranslatedTitle] = useState(translations[selectedLanguage]?.title || translations.en.title)
 
   useEffect(() => {
     // Call getTranslation when selectedLanguage changes
@@ -792,7 +793,22 @@ How can I assist you today? You can ask questions, upload images, or use voice c
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLanguage])
 
+  const [firstAidCondition, setFirstAidCondition] = useState("");
+  const [firstAidSteps, setFirstAidSteps] = useState([]);
+
+  async function handleGetFirstAidSteps() {
+    setFirstAidSteps([]); // Clear previous
+    const res = await fetch("http://localhost:5000/api/first-aid-steps", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ condition: firstAidCondition }),
+    });
+    const data = await res.json();
+    setFirstAidSteps(Array.isArray(data.steps) ? data.steps : data.steps.split("\n"));
+  }
+
   return (
+    
     <div
       className={`min-h-screen transition-all duration-500 ${darkMode ? "bg-gradient-to-br from-gray-900 to-blue-900 text-white" : "bg-gradient-to-br from-blue-50 to-green-50"}`}
     >
@@ -830,13 +846,21 @@ How can I assist you today? You can ask questions, upload images, or use voice c
               {/* Voice Toggle */}
               <div className="flex items-center gap-2">
                 {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-                <Switch checked={voiceEnabled} onCheckedChange={setVoiceEnabled} />
+                <Switch
+                  checked={voiceEnabled}
+                  onCheckedChange={setVoiceEnabled}
+                  className="border border-gray-400 rounded-full"
+                />
               </div>
 
               {/* Dark Mode Toggle */}
               <div className="flex items-center gap-2">
                 {darkMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-                <Switch checked={darkMode} onCheckedChange={setDarkMode} />
+                <Switch
+                  checked={darkMode}
+                  onCheckedChange={setDarkMode}
+                  className="border border-gray-400 rounded-full"
+                />
               </div>
 
               {/* Enhanced Language Selector with AI indicator */}
@@ -877,7 +901,8 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                     SOS
                   </>
                 )}
-              </Button>
+                </Button>
+    
             </div>
           </div>
         </div>
@@ -983,6 +1008,31 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                 </CardContent>
               </Card>
             </div>
+
+            {/* First Aid Steps Request UI */}
+            <Card className={`mb-4 ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
+              <CardContent className="p-4 flex flex-col md:flex-row items-center gap-2">
+                <Input
+                  placeholder="Enter a condition (e.g. burn, cut, choking)"
+                  value={firstAidCondition}
+                  onChange={e => setFirstAidCondition(e.target.value)}
+                  className="flex-1"
+                />
+                <Button onClick={handleGetFirstAidSteps} disabled={!firstAidCondition.trim()}>
+                  Get First Aid Steps
+                </Button>
+              </CardContent>
+              {firstAidSteps.length > 0 && (
+                <CardContent className="p-4">
+                  <h4 className="font-semibold mb-2">First Aid Steps:</h4>
+                  <ol className="list-decimal list-inside space-y-1">
+                    {firstAidSteps.map((step, idx) => (
+                      <li key={idx} className="text-sm">{step}</li>
+                    ))}
+                  </ol>
+                </CardContent>
+              )}
+            </Card>
 
             {/* Enhanced Chat Interface with AI indicators */}
             <Card className={`h-[500px] flex flex-col ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
@@ -1429,7 +1479,26 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                           <Navigation className="w-3 h-3" />
                           Directions
                         </Button>
-                        <Button size="sm" variant="outline" className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex items-center gap-1"
+                          onClick={() => {
+                            const shareData = {
+                              title: clinic.name,
+                              text: `Check out this clinic: ${clinic.name}\nAddress: ${clinic.address}\nRating: ${clinic.rating}\nType: ${clinic.type}`,
+                              url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clinic.address)}`,
+                            };
+                            if (navigator.share) {
+                              navigator.share(shareData).catch(() => {});
+                            } else {
+                              // Fallback: copy to clipboard
+                              const textToCopy = `${shareData.text}\n${shareData.url}`;
+                              navigator.clipboard.writeText(textToCopy);
+                              alert("Clinic info copied to clipboard!");
+                            }
+                          }}
+                        >
                           <Share2 className="w-3 h-3" />
                           Share
                         </Button>
@@ -1671,34 +1740,21 @@ How can I assist you today? You can ask questions, upload images, or use voice c
               </Card>
 
               <Card
-                className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"} ${gestureControl ? "ring-2 ring-blue-500" : ""}`}
-              >
-                <CardContent className="p-6 text-center">
-                  <div className="bg-blue-500 p-3 rounded-full w-fit mx-auto mb-3 relative">
-                    <Hand className="w-6 h-6 text-white" />
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full"></div>
-                  </div>
-                  <h3 className="font-semibold mb-2">AI Gesture Control</h3>
-                  <Button size="sm" onClick={enableGestureControl} variant={gestureControl ? "default" : "outline"}>
-                    {gestureControl ? "Disable" : "Enable"}
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card
-                className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"} ${biometricAuth ? "ring-2 ring-green-500" : ""}`}
-              >
-                <CardContent className="p-6 text-center">
-                  <div className="bg-green-500 p-3 rounded-full w-fit mx-auto mb-3 relative">
-                    <Shield className="w-6 h-6 text-white" />
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full"></div>
-                  </div>
-                  <h3 className="font-semibold mb-2">AI Biometric Auth</h3>
-                  <Button size="sm" onClick={authenticateBiometric} variant={biometricAuth ? "default" : "outline"}>
-                    {biometricAuth ? "Authenticated" : "Authenticate"}
-                  </Button>
-                </CardContent>
-              </Card>
+  className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"} ${gestureControl ? "ring-2 ring-blue-500" : ""}`}
+>
+  <CardContent className="p-6 text-center">
+    <div className="bg-blue-500 p-3 rounded-full w-fit mx-auto mb-3 relative">
+      <Hand className="w-6 h-6 text-white" />
+      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full"></div>
+    </div>
+    <Button size="sm" onClick={enableGestureControl} variant={gestureControl ? "default" : "outline"}>
+      {gestureControl ? "Disable Gesture" : "Enable Gesture"}
+    </Button>
+    <Button size="sm" onClick={authenticateBiometric} variant={biometricAuth ? "default" : "outline"} className="ml-2">
+      {biometricAuth ? "Authenticated" : "Authenticate"}
+    </Button>
+  </CardContent>
+</Card>
 
               <Card
                 className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"} ${droneResponse ? "ring-2 ring-red-500 animate-bounce" : ""}`}
@@ -1716,12 +1772,13 @@ How can I assist you today? You can ask questions, upload images, or use voice c
               </Card>
             </div>
 
+ 
             {/* AI Health Predictions */}
             <Card className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Snowflake className="w-5 h-5 text-blue-500" />
-                                   AI Health Predictions
+                  AI Health Predictions
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -1815,7 +1872,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {smartDevices.map((device, index) => (
-                    <div key={index} className="p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <div key={index} className="mb-4 p-2 rounded bg-gray-50 dark:bg-gray-900">
                       <div className="flex items-center justify-between mb-2">
                         <h4 className="font-semibold flex items-center gap-2">
                           <Bot className="w-4 h-4" />
@@ -1893,6 +1950,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
         </Tabs>
       </div>
     </div>
+  
   )
 }
 
