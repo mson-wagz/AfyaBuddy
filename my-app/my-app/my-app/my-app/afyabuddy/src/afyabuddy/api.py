@@ -1,6 +1,6 @@
 # filepath: afyabuddy/api.py
 
-from fastapi import FastAPI, Request # type: ignore
+from fastapi import FastAPI, Request
 from .crew import Afyabuddy
 
 app = FastAPI()

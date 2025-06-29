@@ -11,7 +11,7 @@ def first_aid_steps():
     data = request.get_json()
     condition = data.get("condition", "")
     target_language = data.get("target_language", "en")
-    result = afyabuddy.run_first_aid(condition, target_language)
+    result = afyabuddy.run_first_aid(condition)
 
     # Only translate if not English and result is valid
     if target_language != "en" and isinstance(result, dict):
