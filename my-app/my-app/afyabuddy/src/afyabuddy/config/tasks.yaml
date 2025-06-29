@@ -1,17 +1,34 @@
-research_task:
+give_first_aid:
   description: >
-    Conduct a thorough research about {topic}
-    Make sure you find any interesting and relevant information given
-    the current year is {current_year}.
+    Provide step-by-step first aid instructions for the given situation.
+  agent: first_aid_expert
   expected_output: >
-    A list with 10 bullet points of the most relevant information about {topic}
-  agent: researcher
+    A dictionary containing fields like title, steps, do_not, seek_help_if, symptoms, confidence, and recommendations.
 
-reporting_task:
+translate_first_aid:
   description: >
-    Review the context you got and expand each topic into a full section for a report.
-    Make sure the report is detailed and contains any and all relevant information.
+    Translate the provided first aid instructions into the user's preferred language.
+  agent: translator
   expected_output: >
-    A fully fledged report with the main topics, each with a full section of information.
-    Formatted as markdown without '```'
-  agent: reporting_analyst
+    A string containing the translated text.
+
+find_nearby_clinics:
+  description: >
+    Find and recommend the nearest clinics or hospitals based on the user's location.
+  agent: clinic_finder
+  expected_output: >
+    A list of clinics or hospitals with their names, addresses, and contact details.
+
+analyze_image:
+  description: >
+    Analyze the uploaded image for signs of injury or illness and provide a summary.
+  agent: image_analyzer
+  expected_output: >
+    A summary string describing the findings from the image.
+
+analyze_real_time_situation:
+  description: >
+    Analyze the real-time camera feed to detect and assess any emergency medical situations.
+  agent: situation_analyst
+  expected_output: >
+    A summary string describing the detected situation and recommended actions.
