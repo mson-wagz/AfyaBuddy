@@ -61,73 +61,10 @@ class Afyabuddy():
             process=Process.sequential,
             verbose=True,
         )
+    
 
     # --- HELPER METHODS TO RUN TASKS ---
     def run_first_aid(self, situation, target_language="en"):
-        key = situation.lower()
-        # Map keywords to canonical condition names
-        condition_map = {
-            "low blood sugar": "low blood sugar",
-            "hypoglycemia": "low blood sugar",
-            "diabetic episode": "low blood sugar",
-            "burn": "burn",
-            "choking": "choking",
-            "bleeding": "bleeding",
-            "snake bite": "snake bite",
-            "asthma": "asthma",
-            "asthma attack": "asthma",
-            "heart attack": "heart attack",
-            "stroke": "stroke",
-            "seizure": "seizure",
-            "nosebleed": "nosebleed",
-            "anaphylaxis": "anaphylaxis",
-            "poisoning": "poisoning",
-            "drowning": "drowning",
-            "fracture": "fracture",
-            "electric shock": "electric shock",  # fixed typo
-            "heat stroke": "heat stroke",
-            "hypothermia": "hypothermia",
-            "heat exhaustion": "heat exhaustion",
-            "eye injury": "eye injury",
-            "fainting": "fainting",
-            "animal bite": "animal bite",
-            "burn (chemical)": "burn (chemical)",
-            "tooth knocked out": "tooth knocked out",
-            "bullet wound": "bullet wound",
-            "fire injury": "fire injury",
-            "chemical exposure": "chemical exposure",
-            "allergic reaction": "allergic reaction",
-            "head injury": "head injury",
-            "spinal injury": "spinal injury",
-            "amputation": "amputation",
-            "crush injury": "crush injury",
-            "eye chemical burn": "eye chemical burn",
-            "frostbite": "frostbite",
-            "hyperventilation": "hyperventilation",
-            "heat cramps": "heat cramps",
-            "bee sting": "bee sting",
-            "dog bite": "dog bite",
-            "childbirth emergency": "childbirth emergency",
-            "carbon monoxide poisoning": "carbon monoxide poisoning",
-            "ear bleeding": "ear bleeding",
-            "vomiting blood": "vomiting blood",
-            "diarrhea": "diarrhea",
-            "panic attack": "panic attack",
-            "broken tooth": "broken tooth",
-            "object in nose": "object in nose",
-            "object in ear": "object in ear",
-            "jaw dislocation": "jaw dislocation",
-            "finger amputation": "finger amputation",
-            "scald (hot liquid burn)": "scald (hot liquid burn)",
-        }
-        # Find the canonical condition
-        matched = None
-        for k, v in condition_map.items():
-            if k in key:
-                matched = v
-                break
-
-        # Hardcoded first aid steps with translations
         steps_dict = {
             "low blood sugar": {
                 "title": "🍬 LOW BLOOD SUGAR (HYPOGLYCEMIA) FIRST AID",
@@ -1877,6 +1814,76 @@ class Afyabuddy():
                 }
             },
         }
+        matched = situation.lower().strip()
+        
+        if matched not in steps_dict:
+            detected = detect_condition_from_input(matched)
+            if detected:
+                matched = detected
+
+        if matched and matched in steps_dict:
+            entry = steps_dict[matched]
+            if target_language != "en" and "translations" in entry and target_language in entry["translations"]:
+                translated = entry["translations"][target_language]
+                translated["confidence"] = entry.get("confidence", 0.9)
+                return translated
+            else:
+                return entry
+        else:
+            return {
+                "content": "No hardcoded steps available for this situation.",
+                "confidence": 0.0,
+                "recommendations": []
+            }
+
+    def run_translation(self, text, target_language):
+                    }
+                }
+            },
+            "scald (hot liquid burn)": {
+                "title": "🥣 SCALD (HOT LIQUID BURN) FIRST AID",
+                "steps": [
+                    "Remove wet clothing immediately.",
+                    "Cool the burn with running water for 10–20 minutes.",
+                    "Cover with a clean, non-stick cloth.",
+                    "Seek medical help if severe."
+                ],
+                "do_not": [
+                    "Do not use ice or creams."
+                ],
+                "confidence": 0.91,
+                "recommendations": [
+                    "Remove wet clothes",
+                    "Cool with water",
+                    "Seek help if severe"
+                ],
+                "translations": {
+                    "sw": {
+                        "title": "🥣 HUDUMA YA KWANZA YA KUUNGUA NA MAJI YA MOTO",
+                        "steps": [
+                            "Vua nguo zenye unyevu mara moja.",
+                            "Pooza kwa maji yanayotiririka kwa dakika 10–20.",
+                            "Funika kwa kitambaa kisichoshika.",
+                            "Tafuta msaada wa daktari kama ni kali."
+                        ],
+                        "do_not": [
+                            "Usitumie barafu au krimu."
+                        ],
+                        "recommendations": [
+                            "Vua nguo zenye unyevu",
+                            "Pooza kwa maji",
+                            "Tafuta msaada"
+                        ]
+                    }
+                }
+            },
+        }
+        matched = situation.lower().strip()
+        
+        if matched not in steps_dict:
+            detected = detect_condition_from_input(matched)
+            if detected:
+                matched = detected
 
         if matched and matched in steps_dict:
             entry = steps_dict[matched]
@@ -1921,3 +1928,161 @@ class Afyabuddy():
             "video_stream": video_stream,
             "analysis": "Not implemented"
         }
+
+                KEYWORD_MAP = {
+            "low blood sugar": [
+                "low blood sugar", "hypoglycemia", "sugar low", "diabetic episode", "shaky", "dizzy", "sweating", "confused", "weak", "faint", "unconscious diabetes"
+            ],
+            "burn": [
+                "burn", "burned", "burnt", "fire", "scald", "hot water", "hot oil", "flame", "skin burn", "steam burn"
+            ],
+            "choking": [
+                "choke", "choking", "can't breathe", "airway", "food stuck", "object in throat", "coughing", "blocked airway"
+            ],
+            "bleeding": [
+                "bleed", "bleeding", "blood", "cut", "wound", "hemorrhage", "gash", "laceration", "open wound", "profuse bleeding"
+            ],
+            "snake bite": [
+                "snake", "snakebite", "bitten by snake", "venom", "snake wound", "reptile bite"
+            ],
+            "asthma": [
+                "asthma", "wheezing", "inhaler", "can't breathe", "shortness of breath", "difficulty breathing", "asthma attack", "tight chest"
+            ],
+            "heart attack": [
+                "heart attack", "chest pain", "myocardial infarction", "tight chest", "pain in chest", "heart problem", "cardiac arrest"
+            ],
+            "stroke": [
+                "stroke", "face drooping", "arm weakness", "speech slurred", "paralysis", "can't speak", "sudden numbness", "brain attack"
+            ],
+            "seizure": [
+                "seizure", "convulsion", "epilepsy", "fits", "shaking", "unconscious", "jerking", "foaming at mouth"
+            ],
+            "nosebleed": [
+                "nosebleed", "nose bleed", "bleeding nose", "blood from nose", "epistaxis"
+            ],
+            "anaphylaxis": [
+                "anaphylaxis", "allergic shock", "severe allergy", "swelling face", "swelling lips", "difficulty breathing allergy", "epipen"
+            ],
+            "poisoning": [
+                "poison", "poisoning", "swallowed poison", "toxic", "ingested chemical", "ate poison", "drank poison"
+            ],
+            "drowning": [
+                "drowning", "almost drowned", "water inhalation", "can't breathe water", "submerged", "near drowning"
+            ],
+            "fracture": [
+                "fracture", "broken bone", "bone break", "crack in bone", "snapped bone", "bone injury"
+            ],
+            "electric shock": [
+                "electric shock", "electrocuted", "shocked", "electricity injury", "power shock", "live wire"
+            ],
+            "heat stroke": [
+                "heat stroke", "overheated", "too hot", "sun stroke", "high temperature", "heat illness", "heat emergency"
+            ],
+            "hypothermia": [
+                "hypothermia", "too cold", "freezing", "low temperature", "shivering", "cold exposure"
+            ],
+            "heat exhaustion": [
+                "heat exhaustion", "tired from heat", "overheated", "sweating a lot", "weak from heat", "heat collapse"
+            ],
+            "eye injury": [
+                "eye injury", "eye trauma", "hit in eye", "object in eye", "chemical in eye", "eye pain", "eye wound"
+            ],
+            "fainting": [
+                "faint", "fainted", "passed out", "lost consciousness", "blackout", "collapse"
+            ],
+            "animal bite": [
+                "animal bite", "bitten by animal", "dog bite", "cat bite", "wild animal bite", "animal wound"
+            ],
+            "burn (chemical)": [
+                "chemical burn", "acid burn", "alkali burn", "chemical on skin", "corrosive burn"
+            ],
+            "tooth knocked out": [
+                "tooth knocked out", "lost tooth", "tooth fell out", "tooth injury", "tooth out"
+            ],
+            "bullet wound": [
+                "bullet wound", "gunshot", "shot", "gun wound", "firearm injury"
+            ],
+            "fire injury": [
+                "fire injury", "burned by fire", "caught fire", "flames injury"
+            ],
+            "chemical exposure": [
+                "chemical exposure", "chemical spill", "chemical on skin", "chemical contact", "toxic exposure"
+            ],
+            "allergic reaction": [
+                "allergic reaction", "allergy", "rash", "swelling", "hives", "itchy", "allergic response"
+            ],
+            "head injury": [
+                "head injury", "hit head", "concussion", "bump on head", "head trauma", "skull injury"
+            ],
+            "spinal injury": [
+                "spinal injury", "back injury", "neck injury", "spine trauma", "can't move legs", "paralyzed"
+            ],
+            "amputation": [
+                "amputation", "cut off", "severed limb", "lost arm", "lost leg", "body part cut off"
+            ],
+            "crush injury": [
+                "crush injury", "crushed", "heavy object fell", "trapped under", "compression injury"
+            ],
+            "eye chemical burn": [
+                "eye chemical burn", "chemical in eye", "acid in eye", "alkali in eye"
+            ],
+            "frostbite": [
+                "frostbite", "frozen skin", "skin turned white", "numb fingers", "cold injury"
+            ],
+            "hyperventilation": [
+                "hyperventilation", "breathing fast", "panic breathing", "rapid breathing", "can't catch breath"
+            ],
+            "heat cramps": [
+                "heat cramps", "muscle cramps", "cramps from heat", "muscle pain heat"
+            ],
+            "bee sting": [
+                "bee sting", "stung by bee", "wasp sting", "insect sting", "bee bite"
+            ],
+            "dog bite": [
+                "dog bite", "bitten by dog", "dog attack", "dog wound"
+            ],
+            "childbirth emergency": [
+                "childbirth", "labor", "giving birth", "baby coming", "delivery emergency", "pregnant emergency"
+            ],
+            "carbon monoxide poisoning": [
+                "carbon monoxide", "gas poisoning", "CO poisoning", "inhaled gas", "heater poisoning"
+            ],
+            "ear bleeding": [
+                "ear bleeding", "blood from ear", "bleeding ear", "ear injury"
+            ],
+            "vomiting blood": [
+                "vomiting blood", "throwing up blood", "blood in vomit", "hematemesis"
+            ],
+            "diarrhea": [
+                "diarrhea", "loose stool", "runny stool", "watery stool", "frequent stool"
+            ],
+            "panic attack": [
+                "panic attack", "anxiety attack", "panic", "sudden fear", "hyperventilating"
+            ],
+            "broken tooth": [
+                "broken tooth", "chipped tooth", "tooth fracture", "tooth broke"
+            ],
+            "object in nose": [
+                "object in nose", "something in nose", "stuck in nose", "nose blockage"
+            ],
+            "object in ear": [
+                "object in ear", "something in ear", "stuck in ear", "ear blockage"
+            ],
+            "jaw dislocation": [
+                "jaw dislocation", "jaw out of place", "dislocated jaw", "jaw injury"
+            ],
+            "finger amputation": [
+                "finger amputation", "cut off finger", "lost finger", "finger severed"
+            ],
+            "scald (hot liquid burn)": [
+                "scald", "hot liquid burn", "burned by hot water", "burned by tea", "burned by soup"
+            ]
+        }
+
+def detect_condition_from_input(user_input):
+    user_input = user_input.lower()
+    for condition, keywords in KEYWORD_MAP.items():
+        for kw in keywords:
+            if kw in user_input:
+                return condition
+    return None
