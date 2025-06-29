@@ -66,35 +66,25 @@ export const getTranslation = async ({
   setAiStatus,
   translateTextGoogle,
 }) => {
-  const baseText = translations.en[key];
+  const baseTranslation = translations[selectedLanguage]?.[key] || translations.en[key]
 
-  // If the selected language is English, just return English
-  if (selectedLanguage === "en") {
-    return baseText;
-  }
+  if (selectedLanguage !== "en" && baseTranslation) {
+    try {
+      setAiStatus((prev) => ({ ...prev, translation: "processing" }))
+      const result = await translateTextGoogle(translations.en[key], "en", selectedLanguage, "ui")
+      setAiStatus((prev) => ({ ...prev, translation: "ready" }))
 
-  // If you have a manual translation, use it
-  if (translations[selectedLanguage]?.[key]) {
-    return translations[selectedLanguage][key];
-  }
-
-  // Otherwise, use Google Translate dynamically
-  try {
-    setAiStatus((prev) => ({ ...prev, translation: "processing" }));
-    const result = await translateTextGoogle(baseText, "en", selectedLanguage, "ui");
-    setAiStatus((prev) => ({ ...prev, translation: "ready" }));
-
-    if (result.success) {
-      return result.translatedText;
+      if (result.success) {
+        return result.translatedText
+      }
+    } catch (error) {
+      console.error("AI translation failed:", error)
+      setAiStatus((prev) => ({ ...prev, translation: "error" }))
     }
-  } catch (error) {
-    console.error("AI translation failed:", error);
-    setAiStatus((prev) => ({ ...prev, translation: "error" }));
   }
 
-  // Fallback to English if translation fails
-  return baseText;
-};
+  return baseTranslation
+}
 
 const App = () => {
   const [messages, setMessages] = useState([])
@@ -178,6 +168,7 @@ const App = () => {
   const [mentalHealthScore, setMentalHealthScore] = useState(85)
   const [environmentalAlerts, setEnvironmentalAlerts] = useState([])
   const [aiCoachMessages, setAiCoachMessages] = useState([])
+  const [isHologramMode, setIsHologramMode] = useState(false)
   const [gestureControl, setGestureControl] = useState(false)
   const [biometricAuth, setBiometricAuth] = useState(false)
   const [droneResponse, setDroneResponse] = useState(false)
@@ -519,8 +510,8 @@ How can I assist you today? You can ask questions, upload images, or use voice c
 
   // Enhanced AI-powered chat submission
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!input.trim() && !uploadedImage) return;
+    e.preventDefault()
+    if (!input.trim() && !uploadedImage) return
 
     const userMessage = {
       id: Date.now().toString(),
@@ -529,96 +520,17 @@ How can I assist you today? You can ask questions, upload images, or use voice c
       image: uploadedImage || undefined,
       timestamp: new Date(),
       isVoice: isListening,
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setIsLoading(true);
-    setInput("");
-    setUploadedImage(null);
-
-    // --- First Aid Keyword Detection ---
-    // List of first aid conditions you support in your backend
-        // --- Translation Keyword Detection ---
-    const translationRegex = /^translate:\s*(.+)\s+to\s+([a-zA-Z-]+)$/i;
-    const translationMatch = userMessage.content.match(translationRegex);
-    
-    if (translationMatch) {
-      const textToTranslate = translationMatch[1];
-      const targetLang = translationMatch[2];
-    
-      try {
-        const data = await getTranslationFromBackend(textToTranslate, targetLang);
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: (Date.now() + 1).toString(),
-            type: "assistant",
-            content: `**Original:** ${data.original}\n**Translated (${data.target_language}):** ${data.translated}`,
-            timestamp: new Date(),
-            isAI: true,
-          },
-        ]);
-      // eslint-disable-next-line no-unused-vars
-      } catch (error) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: (Date.now() + 1).toString(),
-            type: "assistant",
-            content: "Sorry, I couldn't fetch the translation. Please try again.",
-            timestamp: new Date(),
-            isAI: true,
-            isError: true,
-          },
-        ]);
-      }
-      setIsLoading(false);
-      return;
-    } 
-    const firstAidConditions = [
-      "burn", "choking", "bleeding", "snake bite", "asthma", "heart attack", "stroke", "seizure", "nosebleed", "anaphylaxis", "low blood sugar"
-    ];
-
-    // Try to match a condition in the user's input
-    const matchedCondition = firstAidConditions.find((cond) =>
-      userMessage.content.toLowerCase().includes(cond)
-    );
-
-    if (matchedCondition) {
-      try {
-        const data = await getFirstAidStepsFromBackend(matchedCondition, selectedLanguage);
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: (Date.now() + 1).toString(),
-            type: "assistant",
-            content: data, // <-- pass the whole object!
-            timestamp: new Date(),
-            isAI: true,
-          },
-        ]);
-      // eslint-disable-next-line no-unused-vars
-      } catch (error) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: (Date.now() + 1).toString(),
-            type: "assistant",
-            content: "Sorry, I couldn't fetch first aid steps. Please try again.",
-            timestamp: new Date(),
-            isAI: true,
-            isError: true,
-          },
-        ]);
-      }
-      setIsLoading(false);
-      return;
     }
 
-    // --- Otherwise, fallback to OpenAI medical advice as before ---
+    setMessages((prev) => [...prev, userMessage])
+    setIsLoading(true)
+    setInput("")
+    setUploadedImage(null)
+
     try {
       setAiStatus((prev) => ({ ...prev, medical: "processing" }))
 
+      // Get AI-powered medical advice
       const result = await getMedicalAdviceOpenAI(userMessage.content, userMessage.image, selectedLanguage)
 
       setAiStatus((prev) => ({ ...prev, medical: "ready" }))
@@ -757,6 +669,15 @@ How can I assist you today? You can ask questions, upload images, or use voice c
     }
   }
 
+  const activateHologramMode = () => {
+    setIsHologramMode(!isHologramMode)
+    if (!isHologramMode) {
+      setAiCoachMessages((prev) => [
+        ...prev,
+        "🔮 Hologram mode activated! AI-powered 3D anatomical models now available for enhanced guidance.",
+      ])
+    }
+  }
 
   const enableGestureControl = () => {
     setGestureControl(!gestureControl)
@@ -858,7 +779,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
   }
 
   // Example: Use getTranslation to fetch a translated title and display it
-  const [ setTranslatedTitle] = useState("AI Medical Consultation");
+  const [, setTranslatedTitle] = useState(translations[selectedLanguage]?.title || translations.en.title)
 
   useEffect(() => {
     // Call getTranslation when selectedLanguage changes
@@ -872,8 +793,19 @@ How can I assist you today? You can ask questions, upload images, or use voice c
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLanguage])
 
+  const [firstAidCondition, setFirstAidCondition] = useState("");
+  const [firstAidSteps, setFirstAidSteps] = useState([]);
 
-
+  async function handleGetFirstAidSteps() {
+    setFirstAidSteps([]); // Clear previous
+    const res = await fetch("http://localhost:5000/api/first-aid-steps", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ condition: firstAidCondition }),
+    });
+    const data = await res.json();
+    setFirstAidSteps(Array.isArray(data.steps) ? data.steps : data.steps.split("\n"));
+  }
 
   return (
     
@@ -932,13 +864,13 @@ How can I assist you today? You can ask questions, upload images, or use voice c
               </div>
 
               {/* Enhanced Language Selector with AI indicator */}
-              <div className="flex items-center gap-2 bg-white">
+              <div className="flex items-center gap-2">
                 <Globe className="w-4 h-4" />
                 <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
-                  <SelectTrigger className="w-[180px] bg-white">
+                  <SelectTrigger className="w-[180px]">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-white">
+                  <SelectContent>
                     {languages.map((lang) => (
                       <SelectItem key={lang.code} value={lang.code}>
                         <div className="flex flex-col">
@@ -1077,7 +1009,30 @@ How can I assist you today? You can ask questions, upload images, or use voice c
               </Card>
             </div>
 
-            
+            {/* First Aid Steps Request UI */}
+            <Card className={`mb-4 ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
+              <CardContent className="p-4 flex flex-col md:flex-row items-center gap-2">
+                <Input
+                  placeholder="Enter a condition (e.g. burn, cut, choking)"
+                  value={firstAidCondition}
+                  onChange={e => setFirstAidCondition(e.target.value)}
+                  className="flex-1"
+                />
+                <Button onClick={handleGetFirstAidSteps} disabled={!firstAidCondition.trim()}>
+                  Get First Aid Steps
+                </Button>
+              </CardContent>
+              {firstAidSteps.length > 0 && (
+                <CardContent className="p-4">
+                  <h4 className="font-semibold mb-2">First Aid Steps:</h4>
+                  <ol className="list-decimal list-inside space-y-1">
+                    {firstAidSteps.map((step, idx) => (
+                      <li key={idx} className="text-sm">{step}</li>
+                    ))}
+                  </ol>
+                </CardContent>
+              )}
+            </Card>
 
             {/* Enhanced Chat Interface with AI indicators */}
             <Card className={`h-[500px] flex flex-col ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
@@ -1121,11 +1076,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                             className="max-w-full h-32 object-cover rounded mb-2"
                           />
                         )}
-                        {typeof message.content === "object" && message.content.steps ? (
-  <FirstAidInstructions data={message.content} darkMode={darkMode} />
-) : (
-  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-)}
+                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
 
                         {/* AI-specific indicators */}
                         <div className="flex gap-2 mt-2 flex-wrap">
@@ -1758,54 +1709,70 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                     <div className="p-4 rounded-lg bg-gradient-to-r from-green-500/10 to-blue-500/10">
                       <h4 className="font-semibold mb-2 flex items-center gap-2">
                         <Bot className="w-4 h-4" />
-                        AI Wellness Score
+                        AI Mental Health Score
                       </h4>
                       <Progress value={mentalHealthScore} className="mb-2" />
                       <p className="text-sm">
                         {mentalHealthScore}/100 - AI Assessment:{" "}
-                        {mentalHealthScore > 80
-                          ? "Excellent"
-                          : mentalHealthScore > 60
-                            ? "Good"
-                            : "Needs Attention"}
+                        {mentalHealthScore > 80 ? "Excellent" : mentalHealthScore > 60 ? "Good" : "Needs Attention"}
                       </p>
                     </div>
                   </div>
-
-                  <div className="space-y-4">
-                    <Button
-                      onClick={enableGestureControl}
-                      variant={gestureControl ? "default" : "outline"}
-                      className="w-full"
-                    >
-                      {gestureControl ? "Disable Gesture Control" : "Enable Gesture Control"}
-                    </Button>
-                    <Button
-                      onClick={authenticateBiometric}
-                      variant={biometricAuth ? "default" : "outline"}
-                      className="w-full"
-                    >
-                      {biometricAuth ? "Authenticated" : "Authenticate with Biometric"}
-                    </Button>
-                  </div>
                 </div>
-              </CardContent>
-            </Card >          
-             <Card
-              className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"} ${droneResponse ? "ring-2 ring-red-500 animate-bounce" : ""}`}
-            >
-              <CardContent className="p-6 text-center">
-                <div className="bg-red-500 p-3 rounded-full w-fit mx-auto mb-3 relative">
-                  <Plane className="w-6 h-6 text-white" />
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full"></div>
-                </div>
-                <h3 className="font-semibold mb-2">AI Drone Response</h3>
-                <Button size="sm" onClick={requestDroneResponse} variant="destructive" disabled={droneResponse}>
-                  {droneResponse ? "Dispatched" : "Request Drone"}
-                </Button>
               </CardContent>
             </Card>
 
+            {/* Advanced AI Interaction Controls */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card
+                className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"} ${isHologramMode ? "ring-2 ring-purple-500 animate-pulse" : ""}`}
+              >
+                <CardContent className="p-6 text-center">
+                  <div className="bg-purple-500 p-3 rounded-full w-fit mx-auto mb-3 relative">
+                    <Zap className="w-6 h-6 text-white" />
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full"></div>
+                  </div>
+                  <h3 className="font-semibold mb-2">AI Hologram Mode</h3>
+                  <Button size="sm" onClick={activateHologramMode} variant={isHologramMode ? "default" : "outline"}>
+                    {isHologramMode ? "Deactivate" : "Activate"}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card
+  className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"} ${gestureControl ? "ring-2 ring-blue-500" : ""}`}
+>
+  <CardContent className="p-6 text-center">
+    <div className="bg-blue-500 p-3 rounded-full w-fit mx-auto mb-3 relative">
+      <Hand className="w-6 h-6 text-white" />
+      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full"></div>
+    </div>
+    <Button size="sm" onClick={enableGestureControl} variant={gestureControl ? "default" : "outline"}>
+      {gestureControl ? "Disable Gesture" : "Enable Gesture"}
+    </Button>
+    <Button size="sm" onClick={authenticateBiometric} variant={biometricAuth ? "default" : "outline"} className="ml-2">
+      {biometricAuth ? "Authenticated" : "Authenticate"}
+    </Button>
+  </CardContent>
+</Card>
+
+              <Card
+                className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"} ${droneResponse ? "ring-2 ring-red-500 animate-bounce" : ""}`}
+              >
+                <CardContent className="p-6 text-center">
+                  <div className="bg-red-500 p-3 rounded-full w-fit mx-auto mb-3 relative">
+                    <Plane className="w-6 h-6 text-white" />
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full"></div>
+                  </div>
+                  <h3 className="font-semibold mb-2">AI Drone Response</h3>
+                  <Button size="sm" onClick={requestDroneResponse} variant="destructive" disabled={droneResponse}>
+                    {droneResponse ? "Dispatched" : "Request Drone"}
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+
+ 
             {/* AI Health Predictions */}
             <Card className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
               <CardHeader>
@@ -1987,98 +1954,4 @@ How can I assist you today? You can ask questions, upload images, or use voice c
   )
 }
 
-export default App;
-
-async function getFirstAidStepsFromBackend(condition, targetLanguage = "en") {
-  const response = await fetch("http://localhost:5000/api/first-aid-steps", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ condition, target_language: targetLanguage }),
-  });
-  if (!response.ok) throw new Error("Failed to fetch first aid steps");
-  return await response.json();
-}
-
-async function getTranslationFromBackend(text, targetLanguage) {
-  const response = await fetch("http://localhost:5000/api/translate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, target_language: targetLanguage }),
-  });
-  if (!response.ok) throw new Error("Failed to fetch translation");
-  return await response.json();
-}
-
-function FirstAidInstructions({ data, darkMode }) {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
-
-  return (
-    <div>
-      {data.title && (
-        <h3 className={`font-bold mb-2 text-lg ${darkMode ? "text-yellow-300" : "text-red-700"}`}>{data.title}</h3>
-      )}
-
-      {data.symptoms && (
-        <div className="mb-2">
-          <span className="font-semibold text-sm">Symptoms:</span>
-          <ul className="list-disc list-inside ml-4 text-sm">
-            {data.symptoms.map((s, i) => (
-              <li key={i}>{s}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {data.steps && (
-        <div className="mb-2">
-          <span className="font-semibold text-sm">Steps:</span>
-          <ol className="list-decimal list-inside ml-4 text-sm">
-            {data.steps.map((step, i) => (
-              <li key={i}>{step}</li>
-            ))}
-          </ol>
-        </div>
-      )}
-
-      {data.do_not && (
-        <div className="mb-2">
-          <span className="font-semibold text-sm text-red-600">Do NOT:</span>
-          <ul className="list-disc list-inside ml-4 text-sm text-red-500">
-            {data.do_not.map((d, i) => (
-              <li key={i}>{d}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {data.seek_help_if && (
-        <div className="mb-2">
-          <span className="font-semibold text-sm text-orange-600">Seek help if:</span>
-          <ul className="list-disc list-inside ml-4 text-sm text-orange-500">
-            {data.seek_help_if.map((s, i) => (
-              <li key={i}>{s}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {data.recommendations && (
-        <div className="mb-2">
-          <span className="font-semibold text-sm text-green-600">Recommendations:</span>
-          <ul className="list-disc list-inside ml-4 text-sm text-green-500">
-            {data.recommendations.map((r, i) => (
-              <li key={i}>{r}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {typeof data.confidence === "number" && (
-        <div className="mt-2 text-xs text-gray-500">
-          <span>AI Confidence: {(data.confidence * 100).toFixed(0)}%</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
+export default App
