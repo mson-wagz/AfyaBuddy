@@ -21,3 +21,4 @@ build-backend = "hatchling.build"
 
 [tool.crewai]
 type = "crew"
+entrypoint = "src.crew"
