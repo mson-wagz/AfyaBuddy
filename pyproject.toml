@@ -2,18 +2,18 @@
 name = "afyabuddy"
 version = "0.1.0"
 description = "AfyaBuddy using crewAI"
-authors = [{ name = "Your Name", email = "you@example.com" }]
+authors = [{ name = "Abigail Wagura", email = "abigailwagura@gmail.com" }]
 requires-python = ">=3.10,<3.14"
 dependencies = [
     "crewai[tools]>=0.134.0,<1.0.0"
 ]
 
 [project.scripts]
-afyabuddy = "afyabuddy.main:run"
-run_crew = "afyabuddy.main:run"
-train = "afyabuddy.main:train"
-replay = "afyabuddy.main:replay"
-test = "afyabuddy.main:test"
+afyabuddy = "backend.afyabuddy.main:run"
+run_crew = "backend.afyabuddy.main:run"
+train = "backend.afyabuddy.main:train"
+replay = "backend.afyabuddy.main:replay"
+test = "backend.afyabuddy.main:test"
 
 [build-system]
 requires = ["hatchling"]
