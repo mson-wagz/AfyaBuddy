@@ -2019,7 +2019,7 @@ try {
 export default App;
 
 async function getFirstAidStepsFromBackend(condition, targetLanguage = "en") {
-  const response = await fetch("http://localhost:5000/api/first-aid-steps", {
+  const response = await fetch("https://afyabuddy-backend-2.onrender.com/api/first-aid-steps", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ condition, target_language: targetLanguage }),
@@ -2029,7 +2029,7 @@ async function getFirstAidStepsFromBackend(condition, targetLanguage = "en") {
 }
 
 async function getTranslationFromBackend(text, targetLanguage) {
-  const response = await fetch("http://localhost:5000/api/translate", {
+  const response = await fetch("https://afyabuddy-backend-2.onrender.com/api/translate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, target_language: targetLanguage }),
