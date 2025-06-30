@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from crew import Afyabuddy
+from .crew import Afyabuddy
 
 app = Flask(__name__)
 CORS(app)  # This enables CORS for all routes
