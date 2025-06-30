@@ -1596,7 +1596,11 @@ try {
                   <Button
                     onClick={getCurrentLocation}
                     disabled={location.loading}
-                    className="bg-gradient-to-r from-blue-500 to-purple-500"
+                    className={`flex items-center ml-96 mt-8 justify-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all duration-200
+    ${location.loading
+      ? "bg-gradient-to-r from-blue-300 to-purple-300 text-gray-100 cursor-not-allowed"
+      : "bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600"}
+  `}
                   >
                     {location.loading ? (
                       <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -1674,7 +1678,7 @@ try {
                       <Button
                         size="sm"
                         onClick={() => window.open(`tel:${contact.phone}`, "_self")}
-                        className="bg-red-500 hover:bg-red-600"
+                        className="flex items-center gap-2 px-4 py-2 rounded-md font-semibold bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-md hover:from-red-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-red-400 transition-all duration-200"
                       >
                         <Phone className="w-4 h-4 mr-1" />
                         Call
@@ -1693,7 +1697,7 @@ try {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Button
                     size="lg"
-                    className="h-20 bg-red-600 hover:bg-red-700 text-white"
+                     className="flex items-center justify-center gap-3 h-20 px-8 py-6 rounded-xl font-bold text-lg bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-lg hover:from-red-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-red-400 transition-all duration-200"
                     onClick={() => window.open("tel:911", "_self")}
                   >
                     <Phone className="w-6 h-6 mr-2" />
@@ -1702,18 +1706,36 @@ try {
                   <Button
                     size="lg"
                     variant="outline"
-                    className="h-20"
-                    onClick={() => {
-                      if (navigator.share) {
-                        navigator.share({
-                          title: "Emergency Location",
-                          text: `I need help! My location: https://maps.google.com/?q=${location.latitude},${location.longitude}`,
-                        })
-                      }
-                    }}
-                  >
-                    <Share2 className="w-6 h-6 mr-2" />
-                    Share Location
+                    className="flex items-center justify-center gap-3 h-20 px-8 py-6 rounded-xl font-bold text-lg border-2 border-blue-500 text-blue-700 bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all duration-200"
+                    onClick={async () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.");
+      return;
+    }
+    // Show loading or disable button if you want
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const shareData = {
+          title: "Emergency Location",
+          text: `I need help! My live location: https://maps.google.com/?q=${latitude},${longitude}`,
+        };
+        if (navigator.share) {
+          navigator.share(shareData).catch(() => {});
+        } else {
+          navigator.clipboard.writeText(shareData.text);
+          alert("Location copied to clipboard!");
+        }
+      },
+       () => {
+        alert("Unable to retrieve your location. Please enable location services.");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }}
+>
+  <Share2 className="w-6 h-6 mr-2" />
+  Share Live Location
                   </Button>
                 </div>
               </CardContent>
@@ -2029,7 +2051,7 @@ async function getFirstAidStepsFromBackend(condition, targetLanguage = "en") {
 }
 
 async function getTranslationFromBackend(text, targetLanguage) {
-  const response = await fetch("https://afyabuddy-backend-2.onrender.com/api/translate", {
+  const response = await fetch("http://localhost:5000/api/translate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, target_language: targetLanguage }),
