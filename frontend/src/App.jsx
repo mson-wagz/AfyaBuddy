@@ -171,7 +171,7 @@ const App = () => {
   const [sosCountdown, setSosCountdown] = useState(0)
 
   // Enhanced AI-powered features
-  const [ setCameraStream] = useState(null)
+  const [cameraStream, setCameraStream] = useState(null)
   const [isAnalyzingFace, setIsAnalyzingFace] = useState(false)
   const [aiHealthAnalysis, setAiHealthAnalysis] = useState(null)
   const [stressLevel, setStressLevel] = useState(0)
@@ -887,7 +887,7 @@ try {
   }
 
   // Example: Use getTranslation to fetch a translated title and display it
-  const [ setTranslatedTitle] = useState("AI Medical Consultation");
+  const [translatedTitle, setTranslatedTitle] = useState("AI Medical Consultation");
 
   useEffect(() => {
     // Call getTranslation when selectedLanguage changes
@@ -1150,10 +1150,16 @@ try {
                             className="max-w-full h-32 object-cover rounded mb-2"
                           />
                         )}
-                        {typeof message.content === "object" && message.content.steps ? (
+{typeof message.content === "object" &&
+message.content !== null &&
+message.content.steps ? (
   <FirstAidInstructions data={message.content} darkMode={darkMode} />
 ) : (
-  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+  <p className="text-sm whitespace-pre-wrap">
+    {typeof message.content === "string"
+      ? message.content
+      : message.content?.result || JSON.stringify(message.content)}
+  </p>
 )}
 
                         {/* AI-specific indicators */}
@@ -2040,24 +2046,59 @@ try {
 
 export default App;
 
+
 async function getFirstAidStepsFromBackend(condition, targetLanguage = "en") {
-  const response = await fetch("https://afyabuddy-backend-2.onrender.com/api/first-aid-steps", {
+  const response = await fetch("http://localhost:5000/api/first-aid-steps", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ condition, target_language: targetLanguage }),
+    body: JSON.stringify({
+      condition,
+      target_language: targetLanguage,
+    }),
   });
-  if (!response.ok) throw new Error("Failed to fetch first aid steps");
-  return await response.json();
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Failed to fetch first aid steps");
+  }
+
+  // Support either a structured response or a text result from CrewAI.
+  let result = data.result ?? data;
+
+  if (typeof result === "string") {
+    try {
+      result = JSON.parse(result);
+    } catch {
+      return { title: "First Aid Guidance", result };
+    }
+  }
+
+  return result;
 }
+
 
 async function getTranslationFromBackend(text, targetLanguage) {
   const response = await fetch("http://localhost:5000/api/translate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, target_language: targetLanguage }),
+    body: JSON.stringify({
+      text,
+      target_language: targetLanguage,
+    }),
   });
-  if (!response.ok) throw new Error("Failed to fetch translation");
-  return await response.json();
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Failed to translate text");
+  }
+
+  return {
+    original: text,
+    translated: data.translated_text ?? data.result ?? data,
+    target_language: targetLanguage,
+  };
 }
 
 function FirstAidInstructions({ data, darkMode }) {

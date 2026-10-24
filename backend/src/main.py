@@ -4,7 +4,7 @@ import warnings
 
 from datetime import datetime
 
-from AfyaBuddy.backend.src.crew import Afyabuddy
+from .crew import Afyabuddy
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
@@ -18,9 +18,13 @@ def run():
     Run the crew.
     """
     inputs = {
-        'topic': 'AI LLMs',
-        'current_year': str(datetime.now().year)
-    }
+    "situation": "A person has a small superficial cut on their finger.",
+    "language": "English",
+    "instructions": "Clean the small cut, apply pressure if bleeding, and cover it with a clean dressing.",
+    "location": "Juja, Kiambu County, Kenya",
+    "current_year": str(datetime.now().year),
+    "topic": "First aid"
+}
     
     try:
         Afyabuddy().crew().kickoff(inputs=inputs)
