@@ -1,7 +1,7 @@
 # filepath: afyabuddy/api.py
 
 from flask import Flask, request, jsonify
-from afyabuddy.crew import Afyabuddy
+from AfyaBuddy.backend.src.crew import Afyabuddy
 
 app = Flask(__name__)
 ai = Afyabuddy()

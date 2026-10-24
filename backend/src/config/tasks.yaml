@@ -1,0 +1,61 @@
+give_first_aid:
+  description: >
+    Provide safe, evidence-based first aid instructions for this situation:
+    {situation}. Consider the user's age if provided, symptoms, mechanism of
+    injury, and relevant context. Identify immediate life-threatening warning
+    signs before routine instructions. Use vetted medical reference material
+    when available. Never invent medical facts or delay emergency escalation
+    while gathering additional information. Return valid JSON with title,
+    immediate_danger, steps, do_not, seek_help_if, symptoms, confidence,
+    recommendations, and sources. Include source URLs when available and state
+    uncertainty explicitly.
+  agent: first_aid_expert
+  expected_output: >
+    A valid JSON object containing title, immediate_danger, steps, do_not,
+    seek_help_if, symptoms, confidence, recommendations, and sources.
+
+translate_first_aid:
+  description: >
+    Translate the following first aid instructions into {language}:
+    {instructions}. Preserve the order of the steps, emergency warnings,
+    and meaning of every safety instruction. Do not add medical advice or
+    omit uncertainty.
+  agent: translator
+  expected_output: >
+    The translated instructions, including all emergency warnings.
+
+find_nearby_clinics:
+  description: >
+    Find appropriate healthcare facilities near the provided location:
+    {location}. Use available facility-search tools. Recommend emergency
+    services immediately if the situation appears life-threatening.
+    Do not invent facility details. Clearly distinguish verified information
+    from information that could not be confirmed.
+  agent: clinic_finder
+  expected_output: >
+    A structured list of facilities with verified names, addresses,
+    contact details, and source links where available.
+
+analyze_image:
+  description: >
+    Describe visible features in the supplied image relevant to:
+    {situation}. Identify concerning visible signs, explain limitations,
+    and recommend appropriate first aid or urgent professional assessment.
+    Do not provide a definitive diagnosis from the image alone. If the image
+    is unavailable or unclear, state that explicitly.
+  agent: image_analyzer
+  expected_output: >
+    A summary of visible findings, uncertainty, warning signs, and recommended
+    next actions.
+
+analyze_real_time_situation:
+  description: >
+    Assess the supplied emergency situation information:
+    {situation}. Use only the text, images, or video frames actually provided.
+    Identify immediate danger, recommend safe next actions, and explain when
+    emergency services are required. Do not claim to have observed live video
+    unless the video pipeline supplied it.
+  agent: situation_analyst
+  expected_output: >
+    A concise assessment of the situation, immediate actions, warning signs,
+    and recommended escalation.

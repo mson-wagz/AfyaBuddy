@@ -4,7 +4,7 @@ import warnings
 
 from datetime import datetime
 
-from afyabuddy.crew import Afyabuddy
+from AfyaBuddy.backend.src.crew import Afyabuddy
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 

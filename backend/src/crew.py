@@ -2,6 +2,7 @@ from crewai import Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from typing import List
+from backboard_llm import BackboardLLM
 
 @CrewBase
 class Afyabuddy():
@@ -13,15 +14,29 @@ class Afyabuddy():
     # --- AGENTS ---
     @agent
     def first_aid_expert(self) -> Agent:
-        return Agent(config=self.agents_config['first_aid_expert'], verbose=True)
+      return Agent(
+        config=self.agents_config["first_aid_expert"],
+        llm=BackboardLLM(),
+        verbose=True,
+    )
 
     @agent
     def translator(self) -> Agent:
-        return Agent(config=self.agents_config['translator'], verbose=True)
+     return Agent(
+        config=self.agents_config["translator"],
+        llm=BackboardLLM(),
+        verbose=True,
+    )
 
+    
     @agent
     def clinic_finder(self) -> Agent:
-        return Agent(config=self.agents_config['clinic_finder'], verbose=True)
+     return Agent(
+        config=self.agents_config["clinic_finder"],
+        llm=BackboardLLM(),
+        verbose=True,
+    )
+
 
     @agent
     def image_analyzer(self) -> Agent:
