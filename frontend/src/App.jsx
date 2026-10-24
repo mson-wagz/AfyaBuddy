@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { Button } from "./components/ui/button"
 import { Input } from "./components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card"
@@ -38,7 +38,6 @@ import {
   Timer,
   Share2,
   Star,
-  Hand,
   Plane,
   Snowflake,
   Smartphone,
@@ -47,6 +46,7 @@ import {
   CheckCircle,
   XCircle,
 } from "lucide-react"
+import logo from "./assets/afyabuddy-logo.png"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select"
 
 // Import AI services
@@ -57,44 +57,191 @@ import {
   analyzeFacialHealthTensorFlow,
 } from "./lib/ai-services"
 
-// --- Move getTranslation OUTSIDE the App component for external use ---
+/* ------------------------------------------------------------------ */
+/*  BRAND                                                              */
+/*  Teal  #02595A  (main)   Mint  #68DEC4  (accent)   Coral #FD7963    */
+/* ------------------------------------------------------------------ */
+const BRAND_GRADIENT = "bg-gradient-to-r from-[#02595A] to-[#68DEC4]"
+const BRAND_GRADIENT_HOVER = "hover:from-[#014647] hover:to-[#4fcfb2]"
+
+// Toggle switches: visible border in both themes, teal when ON, grey when OFF
+const switchClass = (darkMode) =>
+  `border-2 rounded-full ${
+    darkMode ? "border-[#68DEC4]" : "border-[#02595A]"
+  } data-[state=checked]:bg-[#0a7a77] data-[state=unchecked]:bg-gray-300`
+
+const TAB_CLASS =
+  "flex items-center justify-center gap-2 data-[state=active]:bg-[#02595A] data-[state=active]:text-white"
+
+// Where your backend lives. Set VITE_BACKEND_URL in a .env file to change it.
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://afyabuddy-backend-2.onrender.com"
+
+// Kenya emergency numbers
+const EMERGENCY_NUMBER = "999"
+
+// --- getTranslation lives OUTSIDE the App component so it can be reused ---
 // eslint-disable-next-line react-refresh/only-export-components
-export const getTranslation = async ({
-  key,
-  selectedLanguage,
-  translations,
-  setAiStatus,
-  translateTextGoogle,
-}) => {
-  const baseText = translations.en[key];
+export const getTranslation = async ({ key, selectedLanguage, translations, setAiStatus, translateTextGoogle }) => {
+  const baseText = translations.en[key]
 
-  // If the selected language is English, just return English
+  // English: just return English
   if (selectedLanguage === "en") {
-    return baseText;
+    return baseText
   }
 
-  // If you have a manual translation, use it
+  // Use a manual translation if we have one
   if (translations[selectedLanguage]?.[key]) {
-    return translations[selectedLanguage][key];
+    return translations[selectedLanguage][key]
   }
 
-  // Otherwise, use Google Translate dynamically
+  // Otherwise, use Google Translate
   try {
-    setAiStatus((prev) => ({ ...prev, translation: "processing" }));
-    const result = await translateTextGoogle(baseText, "en", selectedLanguage, "ui");
-    setAiStatus((prev) => ({ ...prev, translation: "ready" }));
+    setAiStatus((prev) => ({ ...prev, translation: "processing" }))
+    const result = await translateTextGoogle(baseText, "en", selectedLanguage, "ui")
+    setAiStatus((prev) => ({ ...prev, translation: "ready" }))
 
     if (result.success) {
-      return result.translatedText;
+      return result.translatedText
     }
   } catch (error) {
-    console.error("AI translation failed:", error);
-    setAiStatus((prev) => ({ ...prev, translation: "error" }));
+    console.error("AI translation failed:", error)
+    setAiStatus((prev) => ({ ...prev, translation: "error" }))
   }
 
-  // Fallback to English if translation fails
-  return baseText;
-};
+  // Fall back to English if translation fails
+  return baseText
+}
+
+// --- Small helper components (outside App so they are not re-created on every render) ---
+
+const AIStatusIndicator = ({ status, label }) => {
+  const color =
+    status === "ready"
+      ? "text-green-500"
+      : status === "processing"
+        ? "text-yellow-500"
+        : status === "error"
+          ? "text-red-500"
+          : "text-gray-500"
+
+  const icon =
+    status === "ready" ? (
+      <CheckCircle className="w-3 h-3" />
+    ) : status === "processing" ? (
+      <Loader2 className="w-3 h-3 animate-spin" />
+    ) : status === "error" ? (
+      <XCircle className="w-3 h-3" />
+    ) : (
+      <Network className="w-3 h-3" />
+    )
+
+  return (
+    <div className={`flex items-center gap-1 text-xs ${color}`}>
+      {icon}
+      <span>{label}</span>
+    </div>
+  )
+}
+
+const DemoNotice = ({ darkMode, children }) => (
+  <Alert className={darkMode ? "bg-yellow-900/20 border-yellow-700" : "bg-yellow-50 border-yellow-200"}>
+    <AlertTriangle className="h-4 w-4 text-yellow-600" />
+    <AlertDescription className={darkMode ? "text-yellow-300" : "text-yellow-800"}>{children}</AlertDescription>
+  </Alert>
+)
+
+async function getFirstAidStepsFromBackend(condition, targetLanguage = "en") {
+  const response = await fetch(`${BACKEND_URL}/api/first-aid-steps`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ condition, target_language: targetLanguage }),
+  })
+  if (!response.ok) throw new Error("Failed to fetch first aid steps")
+  return await response.json()
+}
+
+async function getTranslationFromBackend(text, targetLanguage) {
+  const response = await fetch(`${BACKEND_URL}/api/translate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, target_language: targetLanguage }),
+  })
+  if (!response.ok) throw new Error("Failed to fetch translation")
+  return await response.json()
+}
+
+function FirstAidInstructions({ data, darkMode }) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null
+
+  return (
+    <div>
+      {data.title && (
+        <h3 className={`font-bold mb-2 text-lg ${darkMode ? "text-yellow-300" : "text-[#02595A]"}`}>{data.title}</h3>
+      )}
+
+      {data.symptoms && (
+        <div className="mb-2">
+          <span className="font-semibold text-sm">Symptoms:</span>
+          <ul className="list-disc list-inside ml-4 text-sm">
+            {data.symptoms.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {data.steps && (
+        <div className="mb-2">
+          <span className="font-semibold text-sm">Steps:</span>
+          <ol className="list-decimal list-inside ml-4 text-sm">
+            {data.steps.map((step, i) => (
+              <li key={i}>{step}</li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {data.do_not && (
+        <div className="mb-2">
+          <span className="font-semibold text-sm text-red-600">Do NOT:</span>
+          <ul className="list-disc list-inside ml-4 text-sm text-red-500">
+            {data.do_not.map((d, i) => (
+              <li key={i}>{d}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {data.seek_help_if && (
+        <div className="mb-2">
+          <span className="font-semibold text-sm text-orange-600">Seek help if:</span>
+          <ul className="list-disc list-inside ml-4 text-sm text-orange-500">
+            {data.seek_help_if.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {data.recommendations && (
+        <div className="mb-2">
+          <span className="font-semibold text-sm text-[#02595A]">Recommendations:</span>
+          <ul className="list-disc list-inside ml-4 text-sm text-[#0a7a77]">
+            {data.recommendations.map((r, i) => (
+              <li key={i}>{r}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {typeof data.confidence === "number" && (
+        <div className="mt-2 text-xs text-gray-500">
+          <span>AI Confidence: {(data.confidence * 100).toFixed(0)}%</span>
+        </div>
+      )}
+    </div>
+  )
+}
 
 const App = () => {
   const [messages, setMessages] = useState([])
@@ -109,7 +256,7 @@ const App = () => {
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const [activeTab, setActiveTab] = useState("chat")
-  const [lastFirstAidQuery, setLastFirstAidQuery] = useState(null);
+  const [lastFirstAidQuery, setLastFirstAidQuery] = useState(null)
 
   // AI service status indicators
   const [aiStatus, setAiStatus] = useState({
@@ -119,7 +266,7 @@ const App = () => {
     facial: "ready",
   })
 
-  // Enhanced state variables
+  // Vital signs (simulated demo data)
   const [vitalSigns, setVitalSigns] = useState({
     heartRate: 72,
     temperature: 36.5,
@@ -183,7 +330,6 @@ const App = () => {
   const [biometricAuth, setBiometricAuth] = useState(false)
   const [droneResponse, setDroneResponse] = useState(false)
 
-  // Fix: useState returns [state, setState], not just state
   const [communityHelpers] = useState([
     { name: "Dr. Jane Wanjiku", distance: "0.5km", specialty: "Emergency Medicine", available: true },
     { name: "Nurse Peter Ochieng", distance: "1.2km", specialty: "First Aid Trainer", available: true },
@@ -205,7 +351,6 @@ const App = () => {
   const languages = [
     { code: "en", name: "English", nativeName: "English" },
     { code: "sw", name: "Swahili", nativeName: "Kiswahili" },
- 
   ]
 
   const [location, setLocation] = useState({
@@ -217,113 +362,12 @@ const App = () => {
   const [nearbyClinics, setNearbyClinics] = useState([])
   const [showClinics, setShowClinics] = useState(false)
 
-  // Cool animations and effects
+  // Animations
   const [pulseAnimation, setPulseAnimation] = useState(false)
   const [emergencyPulse, setEmergencyPulse] = useState(false)
 
-  useEffect(() => {
-    if (!lastFirstAidQuery) return;
-  
-    // Find the last assistant message that was a first aid response
-    const lastAssistantMsgIndex = messages
-      .slice()
-      .reverse()
-      .findIndex(
-        (msg) =>
-          msg.type === "assistant" &&
-          typeof msg.content === "object" &&
-          msg.content.steps
-      );
-  
-    if (lastAssistantMsgIndex === -1) return;
-  
-    // Remove the last first aid assistant message
-    const idxToRemove = messages.length - 1 - lastAssistantMsgIndex;
-    const newMessages = messages.filter((_, i) => i !== idxToRemove);
-  
-    // Fetch the translated steps
-    setIsLoading(true);
-    getFirstAidStepsFromBackend(lastFirstAidQuery, selectedLanguage)
-      .then((data) => {
-        if (data && data.steps) {
-          setMessages([
-            ...newMessages,
-            {
-              id: (Date.now() + 1).toString(),
-              type: "assistant",
-              content: data,
-              timestamp: new Date(),
-              isAI: true,
-            },
-          ]);
-        }
-        setIsLoading(false);
-      })
-      .catch(() => setIsLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedLanguage]);
-
-  useEffect(() => {
-    // Add welcome message with AI capabilities
-    const welcomeMessage = {
-      id: "welcome",
-      type: "assistant",
-      content: `🤖 Welcome to AfyaBuddy AI! I'm powered by advanced AI technology to provide you with:
-
-🩺 **OpenAI Medical Consultation** - Expert first aid guidance powered by GPT
-🌍 **Google Maps Location Services** - Smart clinic recommendations  
-🗣️ **Google Translate Support** - Real-time translation in 13+ Kenyan languages
-👁️ **TensorFlow Facial Analysis** - AI-powered stress and wellness assessment
-
-How can I assist you today? You can ask questions, upload images, or use voice commands!`,
-      timestamp: new Date(),
-      isAI: true,
-    }
-    setMessages([welcomeMessage])
-
-    // Simulate vital signs updates
-    const interval = setInterval(() => {
-      setVitalSigns((prev) => ({
-        ...prev,
-        heartRate: Math.floor(Math.random() * 20) + 65,
-        temperature: Math.round((Math.random() * 2 + 36) * 10) / 10,
-        oxygenLevel: Math.floor(Math.random() * 5) + 95,
-      }))
-    }, 5000)
-
-    return () => clearInterval(interval)
-  }, [])
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const triggerEmergencySOS = () => {
-    setEmergencyPulse(true)
-
-    // Simulate emergency actions
-    emergencyContacts.forEach((contact) => {
-      console.log(`Sending emergency alert to ${contact.name}: ${contact.phone}`)
-    })
-
-    // Share location
-    if (location.latitude && location.longitude) {
-      const locationMessage = `Emergency! I need help. My location: https://maps.google.com/?q=${location.latitude},${location.longitude}`
-      console.log("Emergency location shared:", locationMessage)
-    }
-
-    setTimeout(() => {
-      setEmergencyPulse(false)
-      setIsEmergencyMode(false)
-    }, 5000)
-  }
-
-  useEffect(() => {
-    // SOS countdown effect
-    if (sosCountdown > 0) {
-      const timer = setTimeout(() => setSosCountdown(sosCountdown - 1), 1000)
-      return () => clearTimeout(timer)
-    } else if (sosCountdown === 0 && isEmergencyMode) {
-      triggerEmergencySOS()
-    }
-  }, [sosCountdown, isEmergencyMode, triggerEmergencySOS])
+  // Translated chat title
+  const [translatedTitle, setTranslatedTitle] = useState("AI Medical Consultation")
 
   const translations = {
     en: {
@@ -331,9 +375,9 @@ How can I assist you today? You can ask questions, upload images, or use voice c
       subtitle: "Your AI-Powered First Aid Assistant",
       emergencyDisclaimer: "AI Emergency Disclaimer:",
       emergencyText:
-        "This AI assistant provides general first aid guidance only. In serious emergencies, call your local emergency number immediately (911, 999, 112, etc.). Always seek professional medical help for severe injuries.",
+        "This AI assistant provides general first aid guidance only. In serious emergencies, call your local emergency number immediately (999 or 112 in Kenya). Always seek professional medical help for severe injuries.",
       emergencyCall: "Emergency Call",
-      emergencyCallDesc: "Call 911 immediately",
+      emergencyCallDesc: "Call 999 or 112 immediately",
       askQuestion: "Ask AI Assistant",
       askQuestionDesc: "Get AI-powered first aid guidance",
       uploadImage: "AI Image Analysis",
@@ -357,9 +401,9 @@ How can I assist you today? You can ask questions, upload images, or use voice c
       subtitle: "Msaidizi Wako wa AI wa Huduma za Kwanza",
       emergencyDisclaimer: "Onyo la Dharura la AI:",
       emergencyText:
-        "Msaidizi huu wa AI anatoa mwongozo wa jumla wa huduma za kwanza tu. Katika hali za dharura kali, piga simu ya dharura ya eneo lako mara moja. Tafuta msaada wa kitaaluma kila wakati kwa majeraha makubwa.",
+        "Msaidizi huu wa AI anatoa mwongozo wa jumla wa huduma za kwanza tu. Katika hali za dharura kali, piga simu ya dharura ya eneo lako mara moja (999 au 112 nchini Kenya). Tafuta msaada wa kitaaluma kila wakati kwa majeraha makubwa.",
       emergencyCall: "Simu ya Dharura",
-      emergencyCallDesc: "Piga 911 mara moja",
+      emergencyCallDesc: "Piga 999 au 112 mara moja",
       askQuestion: "Uliza Msaidizi wa AI",
       askQuestionDesc: "Pata mwongozo wa AI wa huduma za kwanza",
       uploadImage: "Uchambuzi wa Picha wa AI",
@@ -379,6 +423,122 @@ How can I assist you today? You can ask questions, upload images, or use voice c
       voiceMode: "Msaidizi wa Sauti wa AI",
     },
   }
+
+  const t = translations[selectedLanguage] || translations.en
+
+  // Shared card style (light / dark)
+  const cardCls = darkMode ? "bg-gray-800 border-gray-700" : "bg-white"
+  const mutedText = darkMode ? "text-gray-400" : "text-gray-600"
+
+  /* -------------------------- EFFECTS -------------------------- */
+
+  // Re-fetch the last first-aid answer when the language changes
+  useEffect(() => {
+    if (!lastFirstAidQuery) return
+
+    const lastAssistantMsgIndex = messages
+      .slice()
+      .reverse()
+      .findIndex((msg) => msg.type === "assistant" && typeof msg.content === "object" && msg.content.steps)
+
+    if (lastAssistantMsgIndex === -1) return
+
+    const idxToRemove = messages.length - 1 - lastAssistantMsgIndex
+    const newMessages = messages.filter((_, i) => i !== idxToRemove)
+
+    setIsLoading(true)
+    getFirstAidStepsFromBackend(lastFirstAidQuery, selectedLanguage)
+      .then((data) => {
+        if (data && data.steps) {
+          setMessages([
+            ...newMessages,
+            {
+              id: (Date.now() + 1).toString(),
+              type: "assistant",
+              content: data,
+              timestamp: new Date(),
+              isAI: true,
+            },
+          ])
+        }
+        setIsLoading(false)
+      })
+      .catch(() => setIsLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLanguage])
+
+  // Welcome message + simulated vitals
+  useEffect(() => {
+    const welcomeMessage = {
+      id: "welcome",
+      type: "assistant",
+      content: `🤖 Welcome to AfyaBuddy AI! I'm powered by advanced AI technology to provide you with:
+
+🩺 **OpenAI Medical Consultation** - Expert first aid guidance powered by GPT
+🌍 **Google Maps Location Services** - Smart clinic recommendations  
+🗣️ **Google Translate Support** - Real-time translation in 13+ Kenyan languages
+👁️ **TensorFlow Facial Analysis** - AI-powered stress and wellness assessment
+
+How can I assist you today? You can ask questions, upload images, or use voice commands!`,
+      timestamp: new Date(),
+      isAI: true,
+    }
+    setMessages([welcomeMessage])
+
+    // Simulated vital signs (demo only)
+    const interval = setInterval(() => {
+      setVitalSigns((prev) => ({
+        ...prev,
+        heartRate: Math.floor(Math.random() * 20) + 65,
+        temperature: Math.round((Math.random() * 2 + 36) * 10) / 10,
+        oxygenLevel: Math.floor(Math.random() * 5) + 95,
+      }))
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // SOS action. useCallback keeps it stable so the countdown effect doesn't re-fire.
+  const triggerEmergencySOS = useCallback(() => {
+    setEmergencyPulse(true)
+    setIsEmergencyMode(false) // stop the countdown right away so this only fires once
+
+    // Simulated emergency actions
+    emergencyContacts.forEach((contact) => {
+      console.log(`Sending emergency alert to ${contact.name}: ${contact.phone}`)
+    })
+
+    if (location.latitude && location.longitude) {
+      const locationMessage = `Emergency! I need help. My location: https://maps.google.com/?q=${location.latitude},${location.longitude}`
+      console.log("Emergency location shared:", locationMessage)
+    }
+
+    setTimeout(() => setEmergencyPulse(false), 5000)
+  }, [emergencyContacts, location.latitude, location.longitude])
+
+  // SOS countdown
+  useEffect(() => {
+    if (sosCountdown > 0) {
+      const timer = setTimeout(() => setSosCountdown((c) => c - 1), 1000)
+      return () => clearTimeout(timer)
+    } else if (sosCountdown === 0 && isEmergencyMode) {
+      triggerEmergencySOS()
+    }
+  }, [sosCountdown, isEmergencyMode, triggerEmergencySOS])
+
+  // Translate the chat title when the language changes
+  useEffect(() => {
+    getTranslation({
+      key: "firstAidChat",
+      selectedLanguage,
+      translations,
+      setAiStatus,
+      translateTextGoogle,
+    }).then(setTranslatedTitle)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLanguage])
+
+  /* -------------------------- ACTIONS -------------------------- */
 
   const startVoiceRecognition = () => {
     if (!("webkitSpeechRecognition" in window)) {
@@ -419,7 +579,6 @@ How can I assist you today? You can ask questions, upload images, or use voice c
   const speakText = async (text) => {
     if (!voiceEnabled) return
 
-    // Translate text to selected language if needed
     let textToSpeak = text
     if (selectedLanguage !== "en") {
       try {
@@ -442,8 +601,6 @@ How can I assist you today? You can ask questions, upload images, or use voice c
 
     speechSynthesis.speak(utterance)
   }
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
 
   const startSOSCountdown = () => {
     setIsEmergencyMode(true)
@@ -488,7 +645,6 @@ How can I assist you today? You can ask questions, upload images, or use voice c
     )
   }
 
-  // Enhanced AI-powered clinic finding
   const findNearbyClinicsAI = async (userLat, userLng) => {
     try {
       setAiStatus((prev) => ({ ...prev, location: "processing" }))
@@ -501,14 +657,10 @@ How can I assist you today? You can ask questions, upload images, or use voice c
         setNearbyClinics(result.clinics)
         setShowClinics(true)
 
-        // Update achievements
         setAchievements((prev) =>
-          prev.map((achievement) => {
-            if (achievement.id === "4") {
-              return { ...achievement, unlocked: true, progress: 100 }
-            }
-            return achievement
-          }),
+          prev.map((achievement) =>
+            achievement.id === "4" ? { ...achievement, unlocked: true, progress: 100 } : achievement,
+          ),
         )
       } else {
         throw new Error(result.error)
@@ -517,7 +669,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
       console.error("AI clinic finding failed:", error)
       setAiStatus((prev) => ({ ...prev, location: "error" }))
 
-      // Use fallback clinic data
+      // Fallback clinic data
       const fallbackClinics = [
         {
           id: "1",
@@ -550,10 +702,9 @@ How can I assist you today? You can ask questions, upload images, or use voice c
     }
   }
 
-  // Enhanced AI-powered chat submission
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!input.trim() && !uploadedImage) return;
+    e.preventDefault()
+    if (!input.trim() && !uploadedImage) return
 
     const userMessage = {
       id: Date.now().toString(),
@@ -562,25 +713,23 @@ How can I assist you today? You can ask questions, upload images, or use voice c
       image: uploadedImage || undefined,
       timestamp: new Date(),
       isVoice: isListening,
-    };
+    }
 
-    setMessages((prev) => [...prev, userMessage]);
-    setIsLoading(true);
-    setInput("");
-    setUploadedImage(null);
+    setMessages((prev) => [...prev, userMessage])
+    setIsLoading(true)
+    setInput("")
+    setUploadedImage(null)
 
-    // --- First Aid Keyword Detection ---
-    // List of first aid conditions you support in your backend
-        // --- Translation Keyword Detection ---
-    const translationRegex = /^translate:\s*(.+)\s+to\s+([a-zA-Z-]+)$/i;
-    const translationMatch = userMessage.content.match(translationRegex);
-    
+    // --- Translation command: "translate: hello to sw" ---
+    const translationRegex = /^translate:\s*(.+)\s+to\s+([a-zA-Z-]+)$/i
+    const translationMatch = userMessage.content.match(translationRegex)
+
     if (translationMatch) {
-      const textToTranslate = translationMatch[1];
-      const targetLang = translationMatch[2];
-    
+      const textToTranslate = translationMatch[1]
+      const targetLang = translationMatch[2]
+
       try {
-        const data = await getTranslationFromBackend(textToTranslate, targetLang);
+        const data = await getTranslationFromBackend(textToTranslate, targetLang)
         setMessages((prev) => [
           ...prev,
           {
@@ -590,9 +739,8 @@ How can I assist you today? You can ask questions, upload images, or use voice c
             timestamp: new Date(),
             isAI: true,
           },
-        ]);
-      // eslint-disable-next-line no-unused-vars
-      } catch (error) {
+        ])
+      } catch {
         setMessages((prev) => [
           ...prev,
           {
@@ -603,48 +751,38 @@ How can I assist you today? You can ask questions, upload images, or use voice c
             isAI: true,
             isError: true,
           },
-        ]);
+        ])
       }
-      setIsLoading(false);
-      return;
-    } 
-  // ...existing code...
-// Always send the user's message to the backend for first aid matching
-try {
-  const data = await getFirstAidStepsFromBackend(userMessage.content, selectedLanguage);
-  if (data && data.steps) {
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: (Date.now() + 1).toString(),
-        type: "assistant",
-        content: data,
-        timestamp: new Date(),
-        isAI: true,
-      },
-    ]);
-    setLastFirstAidQuery(userMessage.content); // <-- Add this line
-    setIsLoading(false);
-    return;
-  }
-// eslint-disable-next-line no-unused-vars
-} catch (error) {
-  setMessages((prev) => [
-    ...prev,
-    {
-      id: (Date.now() + 1).toString(),
-      type: "assistant",
-      content: "Sorry, I couldn't fetch first aid steps. Please try again.",
-      timestamp: new Date(),
-      isAI: true,
-      isError: true,
-    },
-  ]);
-  setIsLoading(false);
-  return;
-}
-// ...existing code...
-    // --- Otherwise, fallback to OpenAI medical advice as before ---
+      setIsLoading(false)
+      return
+    }
+
+    // --- First aid lookup from your backend (text-only questions) ---
+    // If it finds steps, we show them. If not (or if it fails), we fall through to OpenAI below.
+    if (!userMessage.image) {
+      try {
+        const data = await getFirstAidStepsFromBackend(userMessage.content, selectedLanguage)
+        if (data && data.steps) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: (Date.now() + 1).toString(),
+              type: "assistant",
+              content: data,
+              timestamp: new Date(),
+              isAI: true,
+            },
+          ])
+          setLastFirstAidQuery(userMessage.content)
+          setIsLoading(false)
+          return
+        }
+      } catch (error) {
+        console.error("First aid backend failed, trying OpenAI:", error)
+      }
+    }
+
+    // --- Otherwise, use OpenAI medical advice ---
     try {
       setAiStatus((prev) => ({ ...prev, medical: "processing" }))
 
@@ -666,17 +804,15 @@ try {
           recommendations: result.recommendations,
         }
 
-        // Update achievements for AI consultation
         setAchievements((prev) =>
-          prev.map((achievement) => {
-            if (achievement.id === "1" && achievement.progress < 100) {
-              return { ...achievement, progress: 100, unlocked: true }
-            }
-            return achievement
-          }),
+          prev.map((achievement) =>
+            achievement.id === "1" && achievement.progress < 100
+              ? { ...achievement, progress: 100, unlocked: true }
+              : achievement,
+          ),
         )
 
-        // Auto-trigger location request for urgent cases
+        // Auto-request location for urgent cases
         if (result.urgencyLevel === "high") {
           setTimeout(() => {
             getCurrentLocation()
@@ -696,7 +832,6 @@ try {
       setMessages((prev) => [...prev, assistantMessage])
       setIsLoading(false)
 
-      // Speak the response if voice is enabled
       if (voiceEnabled && assistantMessage.content) {
         speakText(assistantMessage.content.replace(/[🩹🔥🦴🫁💡🤖]/gu, ""))
       }
@@ -704,22 +839,22 @@ try {
       console.error("AI consultation failed:", error)
       setAiStatus((prev) => ({ ...prev, medical: "error" }))
 
-      const errorMessage = {
-        id: (Date.now() + 1).toString(),
-        type: "assistant",
-        content:
-          "🤖 I'm experiencing technical difficulties. Please try again or contact emergency services if this is urgent.",
-        timestamp: new Date(),
-        isAI: true,
-        isError: true,
-      }
-
-      setMessages((prev) => [...prev, errorMessage])
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          type: "assistant",
+          content:
+            "🤖 I'm experiencing technical difficulties. Please try again or contact emergency services if this is urgent.",
+          timestamp: new Date(),
+          isAI: true,
+          isError: true,
+        },
+      ])
       setIsLoading(false)
     }
   }
 
-  // Enhanced AI-powered facial analysis
   const startFacialAnalysis = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true })
@@ -727,14 +862,12 @@ try {
       setIsAnalyzingFace(true)
       setAiStatus((prev) => ({ ...prev, facial: "processing" }))
 
-      // Create video element for analysis
       const video = document.createElement("video")
       video.srcObject = stream
       video.play()
 
-      // Wait for video to be ready
       video.onloadedmetadata = async () => {
-        // Get AI analysis after 5 seconds of "scanning"
+        // "Scan" for 8 seconds, then analyse
         setTimeout(async () => {
           try {
             const result = await analyzeFacialHealthTensorFlow(video, vitalSigns)
@@ -747,16 +880,11 @@ try {
               setPainLevel(result.analysis.painLevel)
               setMentalHealthScore(result.analysis.mentalHealthScore)
 
-              // Update achievements
               setAchievements((prev) =>
                 prev.map((achievement) => {
                   if (achievement.id === "3" && achievement.progress < 5) {
                     const newProgress = achievement.progress + 1
-                    return {
-                      ...achievement,
-                      progress: newProgress,
-                      unlocked: newProgress >= 5,
-                    }
+                    return { ...achievement, progress: newProgress, unlocked: newProgress >= 5 }
                   }
                   return achievement
                 }),
@@ -786,13 +914,12 @@ try {
     }
   }
 
-
   const enableGestureControl = () => {
     setGestureControl(!gestureControl)
     if (!gestureControl) {
       setAiCoachMessages((prev) => [
         ...prev,
-        "👋 AI Gesture control enabled! Wave your hand to navigate, point to select.",
+        "👋 Gesture control switched on (demo). Real hand tracking is not connected yet.",
       ])
     }
   }
@@ -803,7 +930,7 @@ try {
         setBiometricAuth(true)
         setAiCoachMessages((prev) => [
           ...prev,
-          "🔐 Biometric authentication successful! Your AI health data is now secured with advanced encryption.",
+          "🔐 Biometric sign-in switched on (demo). No real fingerprint or face check is connected yet.",
         ])
       } catch (error) {
         console.error("Biometric auth failed:", error)
@@ -815,24 +942,20 @@ try {
     setDroneResponse(true)
     setAiCoachMessages((prev) => [
       ...prev,
-      "🚁 AI Emergency drone dispatched! ETA: 3 minutes. Drone equipped with medical supplies and AI-guided defibrillator.",
+      "🚁 Drone request (demo only): no real drone is dispatched. In an emergency, call " + EMERGENCY_NUMBER + " or 112.",
     ])
 
     setTimeout(() => {
       setDroneResponse(false)
-      setAiCoachMessages((prev) => [
-        ...prev,
-        "🚁 AI Drone arrived at your location! Follow the AI-powered audio instructions from the drone.",
-      ])
     }, 5000)
   }
 
   const analyzeEnvironment = () => {
     const alerts = [
-      "🌡️ AI detected high temperature (32°C) - Risk of heat exhaustion",
-      "💨 AI air quality analysis shows poor conditions - Consider wearing a mask",
-      "🌧️ AI weather analysis: High humidity (85%) - Stay hydrated",
-      "☀️ AI UV analysis: High UV index - Apply sunscreen",
+      "🌡️ High temperature (32°C) - Risk of heat exhaustion (demo)",
+      "💨 Poor air quality - Consider wearing a mask (demo)",
+      "🌧️ High humidity (85%) - Stay hydrated (demo)",
+      "☀️ High UV index - Apply sunscreen (demo)",
     ]
 
     setEnvironmentalAlerts([alerts[Math.floor(Math.random() * alerts.length)]])
@@ -840,49 +963,39 @@ try {
 
   const startAIHealthCoach = () => {
     const coachMessages = [
-      "🤖 Advanced AI Health Coach activated! I've analyzed your patterns using machine learning algorithms.",
-      "💡 Based on AI stress analysis, I recommend 5 minutes of guided breathing exercises.",
-      "🏃‍♂️ AI activity tracker shows low movement today. A 10-minute walk would boost your energy!",
-      "💧 AI hydration algorithm reminder: You should drink water every 30 minutes in this weather.",
-      "🧘‍♀️ AI mental health assessment suggests you'd benefit from a mindfulness session.",
+      "🤖 Health Coach activated! Here are a few general wellness tips.",
+      "💡 Try 5 minutes of slow, guided breathing to ease stress.",
+      "🏃‍♂️ A 10-minute walk can boost your energy.",
+      "💧 Drink water regularly, especially in warm weather.",
+      "🧘‍♀️ A short mindfulness break can help you reset.",
     ]
 
     setAiCoachMessages(coachMessages)
   }
 
-  // AI Status indicator component
-  const AIStatusIndicator = ({ status, label }) => {
-    const getStatusColor = () => {
-      switch (status) {
-        case "ready":
-          return "text-green-500"
-        case "processing":
-          return "text-yellow-500"
-        case "error":
-          return "text-red-500"
-        default:
-          return "text-gray-500"
-      }
+  const shareLiveLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.")
+      return
     }
-
-    const getStatusIcon = () => {
-      switch (status) {
-        case "ready":
-          return <CheckCircle className="w-3 h-3" />
-        case "processing":
-          return <Loader2 className="w-3 h-3 animate-spin" />
-        case "error":
-          return <XCircle className="w-3 h-3" />
-        default:
-          return <Network className="w-3 h-3" />
-      }
-    }
-
-    return (
-      <div className={`flex items-center gap-1 text-xs ${getStatusColor()}`}>
-        {getStatusIcon()}
-        <span>{label}</span>
-      </div>
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords
+        const shareData = {
+          title: "Emergency Location",
+          text: `I need help! My live location: https://maps.google.com/?q=${latitude},${longitude}`,
+        }
+        if (navigator.share) {
+          navigator.share(shareData).catch(() => {})
+        } else {
+          navigator.clipboard.writeText(shareData.text)
+          alert("Location copied to clipboard!")
+        }
+      },
+      () => {
+        alert("Unable to retrieve your location. Please enable location services.")
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
     )
   }
 
@@ -890,7 +1003,6 @@ try {
   const [translatedTitle, setTranslatedTitle] = useState("AI Medical Consultation");
 
   useEffect(() => {
-    // Call getTranslation when selectedLanguage changes
     getTranslation({
       key: "title",
       selectedLanguage,
@@ -905,32 +1017,35 @@ try {
 
 
   return (
-    
-    <div
-      className={`min-h-screen transition-all duration-500 ${darkMode ? "bg-gradient-to-br from-gray-900 to-blue-900 text-white" : "bg-gradient-to-br from-blue-50 to-green-50"}`}
+      }`}
     >
-      {/* Enhanced Header with AI Status */}
+      {/* Header */}
       <div
         className={`shadow-lg border-b backdrop-blur-md ${darkMode ? "bg-gray-800/90 border-gray-700" : "bg-white/90 border-gray-200"}`}
       >
         <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            {/* Logo + status */}
             <div className="flex items-center gap-3">
               <div
-                className={`p-3 rounded-full ${pulseAnimation ? "animate-pulse" : ""} ${emergencyPulse ? "animate-bounce bg-red-600" : "bg-gradient-to-r from-red-500 to-pink-500"}`}
+                className={`${darkMode ? "bg-white rounded-xl px-2 py-1" : ""} ${emergencyPulse ? "animate-bounce" : ""} ${pulseAnimation ? "animate-pulse" : ""}`}
               >
-                <Bot className="w-6 h-6 text-white" />
+                <img
+                  src={logo}
+                  alt="AfyaBuddy"
+                  className="h-12 w-auto"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none"
+                    e.currentTarget.nextElementSibling.style.display = "block"
+                  }}
+                />
+                <span style={{ display: "none" }} className="text-2xl font-bold text-[#02595A]">
+                  AfyaBuddy
+                </span>
               </div>
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-red-500 to-pink-500 bg-clip-text text-transparent">
-                  AfyaBuddy AI
-                </h1>
-                <p className={`text-sm ${darkMode ? "text-gray-300" : "text-gray-600"}`}>
-                  Powered by OpenAI, Google AI & TensorFlow
-                </p>
-
-                {/* AI Status Indicators */}
-                <div className="flex gap-4 mt-1">
+                <p className={`text-sm ${darkMode ? "text-gray-300" : "text-[#02595A]"}`}>{t.subtitle}</p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
                   <AIStatusIndicator status={aiStatus.medical} label="OpenAI" />
                   <AIStatusIndicator status={aiStatus.location} label="Google Maps" />
                   <AIStatusIndicator status={aiStatus.translation} label="Translate" />
@@ -939,29 +1054,30 @@ try {
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              {/* Voice Toggle */}
+            {/* Controls */}
+            <div className="flex flex-wrap items-center gap-4">
+              {/* Voice toggle */}
               <div className="flex items-center gap-2">
                 {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
                 <Switch
                   checked={voiceEnabled}
                   onCheckedChange={setVoiceEnabled}
-                  className="border border-gray-400 rounded-full"
+                  className={switchClass(darkMode)}
                 />
               </div>
 
-              {/* Dark Mode Toggle */}
+              {/* Dark mode toggle */}
               <div className="flex items-center gap-2">
                 {darkMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
                 <Switch
                   checked={darkMode}
                   onCheckedChange={setDarkMode}
-                  className="border border-gray-400 rounded-full"
+                  className={switchClass(darkMode)}
                 />
               </div>
 
-              {/* Enhanced Language Selector with AI indicator */}
-              <div className="flex items-center gap-2 bg-white">
+              {/* Language selector */}
+              <div className="flex items-center gap-2 bg-white rounded-md pl-2 text-gray-900">
                 <Globe className="w-4 h-4" />
                 <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
                   <SelectTrigger className="w-[180px] bg-white">
@@ -980,12 +1096,12 @@ try {
                 </Select>
               </div>
 
-              {/* Emergency SOS Button */}
+              {/* Emergency SOS button (stays red on purpose) */}
               <Button
                 variant={isEmergencyMode ? "destructive" : "outline"}
                 size="sm"
                 onClick={isEmergencyMode ? cancelSOS : startSOSCountdown}
-                className={`${isEmergencyMode ? "animate-pulse" : ""} font-bold`}
+                className={`${isEmergencyMode ? "animate-pulse" : "border-red-500 text-red-600"} font-bold`}
               >
                 {isEmergencyMode ? (
                   <>
@@ -998,123 +1114,112 @@ try {
                     SOS
                   </>
                 )}
-                </Button>
-    
+              </Button>
             </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-6">
-        {/* Enhanced Emergency Alert with AI */}
+        {/* Emergency disclaimer (stays red on purpose) */}
         <Alert className={`mb-6 border-red-200 ${darkMode ? "bg-red-900/20" : "bg-red-50"}`}>
           <Bot className="h-4 w-4 text-red-600" />
-          <AlertDescription className={`${darkMode ? "text-red-300" : "text-red-800"}`}>
-            <strong>AI Emergency Disclaimer:</strong> This AI assistant provides general first aid guidance only. In
-            serious emergencies, call your local emergency number immediately. AI recommendations should not replace
-            professional medical care.
+          <AlertDescription className={darkMode ? "text-red-300" : "text-red-800"}>
+            <strong>{t.emergencyDisclaimer}</strong> {t.emergencyText}
           </AlertDescription>
         </Alert>
 
-        {/* Enhanced Tabs Interface */}
+        {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className={`grid w-full grid-cols-6 ${darkMode ? "bg-gray-800" : "bg-white"}`}>
-            <TabsTrigger value="chat" className="flex items-center gap-2">
+            <TabsTrigger value="chat" className={TAB_CLASS}>
               <Bot className="w-4 h-4" />
-              AI Chat
+              <span className="hidden sm:inline">AI Chat</span>
             </TabsTrigger>
-            <TabsTrigger value="vitals" className="flex items-center gap-2">
+            <TabsTrigger value="vitals" className={TAB_CLASS}>
               <Activity className="w-4 h-4" />
-              AI Vitals
+              <span className="hidden sm:inline">AI Vitals</span>
             </TabsTrigger>
-            <TabsTrigger value="clinics" className="flex items-center gap-2">
+            <TabsTrigger value="clinics" className={TAB_CLASS}>
               <MapPin className="w-4 h-4" />
-              AI Clinics
+              <span className="hidden sm:inline">AI Clinics</span>
             </TabsTrigger>
-            <TabsTrigger value="achievements" className="flex items-center gap-2">
+            <TabsTrigger value="achievements" className={TAB_CLASS}>
               <Award className="w-4 h-4" />
-              Achievements
+              <span className="hidden sm:inline">Achievements</span>
             </TabsTrigger>
-            <TabsTrigger value="emergency" className="flex items-center gap-2">
+            <TabsTrigger value="emergency" className={TAB_CLASS}>
               <Phone className="w-4 h-4" />
-              Emergency
+              <span className="hidden sm:inline">Emergency</span>
             </TabsTrigger>
-            <TabsTrigger value="futuristic" className="flex items-center gap-2">
+            <TabsTrigger value="futuristic" className={TAB_CLASS}>
               <Zap className="w-4 h-4" />
-              AI Tech
+              <span className="hidden sm:inline">AI Tech</span>
             </TabsTrigger>
           </TabsList>
 
-          {/* Enhanced Chat Tab with AI Features */}
+          {/* ---------------- CHAT TAB ---------------- */}
           <TabsContent value="chat" className="space-y-6">
-            {/* Enhanced Quick Actions with AI indicators */}
+            {/* Quick actions */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <Card
-                className={`cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-105 ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}
+                className={`cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-105 ${cardCls}`}
+                onClick={() => window.open(`tel:${EMERGENCY_NUMBER}`, "_self")}
               >
                 <CardContent className="p-4 text-center">
                   <div className="bg-red-500 p-3 rounded-full w-fit mx-auto mb-3 relative">
                     <Phone className="w-6 h-6 text-white" />
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full"></div>
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#68DEC4] rounded-full"></div>
                   </div>
-                  <h3 className="font-semibold text-sm">Emergency Call</h3>
-                  <p className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
-                    AI-assisted emergency dispatch
-                  </p>
+                  <h3 className="font-semibold text-sm">{t.emergencyCall}</h3>
+                  <p className={`text-xs ${mutedText}`}>{t.emergencyCallDesc}</p>
                 </CardContent>
               </Card>
 
-              <Card
-                className={`cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-105 ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}
-              >
+              <Card className={`cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-105 ${cardCls}`}>
                 <CardContent className="p-4 text-center">
-                  <div className="bg-blue-500 p-3 rounded-full w-fit mx-auto mb-3 relative">
+                  <div className="bg-[#02595A] p-3 rounded-full w-fit mx-auto mb-3 relative">
                     <Brain className="w-6 h-6 text-white" />
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#68DEC4] rounded-full animate-pulse"></div>
                   </div>
                   <h3 className="font-semibold text-sm">OpenAI Diagnosis</h3>
-                  <p className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
-                    GPT-powered medical analysis
-                  </p>
+                  <p className={`text-xs ${mutedText}`}>GPT-powered medical analysis</p>
                 </CardContent>
               </Card>
 
               <Card
-                className={`cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-105 ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}
+                className={`cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-105 ${cardCls}`}
+                onClick={() => fileInputRef.current?.click()}
               >
                 <CardContent className="p-4 text-center">
-                  <div className="bg-green-500 p-3 rounded-full w-fit mx-auto mb-3 relative">
+                  <div className="bg-[#0a7a77] p-3 rounded-full w-fit mx-auto mb-3 relative">
                     <Eye className="w-6 h-6 text-white" />
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full"></div>
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#68DEC4] rounded-full"></div>
                   </div>
                   <h3 className="font-semibold text-sm">TensorFlow Vision</h3>
-                  <p className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-600"}`}>Advanced image analysis</p>
+                  <p className={`text-xs ${mutedText}`}>Advanced image analysis</p>
                 </CardContent>
               </Card>
 
-              <Card
-                className={`cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-105 ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}
-              >
+              <Card className={`cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-105 ${cardCls}`}>
                 <CardContent className="p-4 text-center">
-                  <div className="bg-purple-500 p-3 rounded-full w-fit mx-auto mb-3 relative">
+                  <div className="bg-[#FD7963] p-3 rounded-full w-fit mx-auto mb-3 relative">
                     <Globe className="w-6 h-6 text-white" />
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full"></div>
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#68DEC4] rounded-full"></div>
                   </div>
                   <h3 className="font-semibold text-sm">Google Translate</h3>
-                  <p className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-600"}`}>13+ Kenyan languages</p>
+                  <p className={`text-xs ${mutedText}`}>13+ Kenyan languages</p>
                 </CardContent>
               </Card>
             </div>
 
-            
-
-            {/* Enhanced Chat Interface with AI indicators */}
-            <Card className={`h-[500px] flex flex-col ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
+            {/* Chat */}
+            <Card className={`h-[500px] flex flex-col ${cardCls}`}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Bot className="w-5 h-5" />
-                  AI Medical Consultation
-                  {isSpeaking && <Volume2 className="w-4 h-4 animate-pulse text-blue-500" />}
+                  <Bot className="w-5 h-5 text-[#02595A]" />
+                  {translatedTitle}
+                  {isSpeaking && <Volume2 className="w-4 h-4 animate-pulse text-[#02595A]" />}
                   {aiStatus.medical === "processing" && <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />}
                 </CardTitle>
               </CardHeader>
@@ -1126,8 +1231,10 @@ try {
                     className={`flex gap-3 ${message.type === "user" ? "justify-end" : "justify-start"}`}
                   >
                     {message.type === "assistant" && (
-                      <Avatar className="w-8 h-8 bg-gradient-to-r from-red-500 to-pink-500">
-                        <AvatarFallback className="text-white text-xs">{message.isAI ? "🤖" : "AI"}</AvatarFallback>
+                      <Avatar className={`w-8 h-8 ${BRAND_GRADIENT}`}>
+                        <AvatarFallback className="text-white text-xs bg-transparent">
+                          {message.isAI ? "🤖" : "AI"}
+                        </AvatarFallback>
                       </Avatar>
                     )}
 
@@ -1135,7 +1242,7 @@ try {
                       <div
                         className={`rounded-lg p-3 ${
                           message.type === "user"
-                            ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white ml-auto"
+                            ? `${BRAND_GRADIENT} text-white ml-auto`
                             : message.isError
                               ? "bg-red-100 text-red-800 border border-red-200"
                               : darkMode
@@ -1162,7 +1269,6 @@ message.content.steps ? (
   </p>
 )}
 
-                        {/* AI-specific indicators */}
                         <div className="flex gap-2 mt-2 flex-wrap">
                           {message.isVoice && (
                             <Badge variant="secondary" className="text-xs">
@@ -1181,7 +1287,7 @@ message.content.steps ? (
                               {Math.round(message.confidence * 100)}% Confidence
                             </Badge>
                           )}
-                          {message.urgencyLevel && message.urgencyLevel === "high" && (
+                          {message.urgencyLevel === "high" && (
                             <Badge variant="destructive" className="text-xs">
                               <AlertTriangle className="w-3 h-3 mr-1" />
                               High Urgency
@@ -1195,8 +1301,8 @@ message.content.steps ? (
                     </div>
 
                     {message.type === "user" && (
-                      <Avatar className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500">
-                        <AvatarFallback className="text-white text-xs">You</AvatarFallback>
+                      <Avatar className="w-8 h-8 bg-[#FD7963]">
+                        <AvatarFallback className="text-white text-xs bg-transparent">You</AvatarFallback>
                       </Avatar>
                     )}
                   </div>
@@ -1204,13 +1310,13 @@ message.content.steps ? (
 
                 {isLoading && (
                   <div className="flex gap-3 justify-start">
-                    <Avatar className="w-8 h-8 bg-gradient-to-r from-red-500 to-pink-500">
-                      <AvatarFallback className="text-white text-xs">🤖</AvatarFallback>
+                    <Avatar className={`w-8 h-8 ${BRAND_GRADIENT}`}>
+                      <AvatarFallback className="text-white text-xs bg-transparent">🤖</AvatarFallback>
                     </Avatar>
                     <div className={`rounded-lg p-3 ${darkMode ? "bg-gray-700" : "bg-gray-100"}`}>
                       <div className="flex items-center gap-2">
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm">AI is analyzing and preparing expert response...</span>
+                        <span className="text-sm">{t.analyzing}</span>
                       </div>
                     </div>
                   </div>
@@ -1219,7 +1325,7 @@ message.content.steps ? (
 
               <Separator />
 
-              {/* Enhanced Input Area with AI features */}
+              {/* Input area */}
               <div className="p-4">
                 {uploadedImage && (
                   <div className="mb-3 relative inline-block">
@@ -1247,7 +1353,7 @@ message.content.steps ? (
                   <Input
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="Ask your AI medical assistant anything..."
+                    placeholder={t.placeholder}
                     className="flex-1"
                     disabled={isLoading}
                   />
@@ -1286,7 +1392,7 @@ message.content.steps ? (
                   <Button
                     type="submit"
                     disabled={isLoading || (!input.trim() && !uploadedImage)}
-                    className="bg-gradient-to-r from-blue-500 to-purple-500"
+                    className={`${BRAND_GRADIENT} ${BRAND_GRADIENT_HOVER} text-white`}
                     title="Send to AI"
                   >
                     {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -1296,91 +1402,94 @@ message.content.steps ? (
             </Card>
           </TabsContent>
 
-          {/* Rest of the tabs remain the same as in the previous implementation */}
-          {/* ... (continuing with vitals, clinics, achievements, emergency, and futuristic tabs) */}
-          {/* Enhanced Vital Signs Tab with AI */}
+          {/* ---------------- VITALS TAB ---------------- */}
           <TabsContent value="vitals" className="space-y-6">
+            <DemoNotice darkMode={darkMode}>
+              <strong>Demo data:</strong> these numbers are simulated and are not real measurements. Do not use them to
+              make health decisions.
+            </DemoNotice>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
+              <Card className={cardCls}>
                 <CardContent className="p-6">
                   <div className="flex items-center gap-3">
-                    <div className="bg-red-500 p-3 rounded-full relative">
+                    <div className="bg-[#FD7963] p-3 rounded-full relative">
                       <Activity className="w-6 h-6 text-white" />
-                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#68DEC4] rounded-full animate-pulse"></div>
                     </div>
                     <div>
-                      <p className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>AI Heart Rate</p>
+                      <p className={`text-sm ${mutedText}`}>Heart Rate (demo)</p>
                       <p className="text-2xl font-bold">{vitalSigns.heartRate} BPM</p>
                     </div>
                   </div>
                   <Progress value={(vitalSigns.heartRate / 120) * 100} className="mt-3" />
-                  <p className="text-xs text-green-600 mt-1">AI: Normal range</p>
+                  <p className="text-xs text-[#0a7a77] mt-1">Normal range</p>
                 </CardContent>
               </Card>
 
-              <Card className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
+              <Card className={cardCls}>
                 <CardContent className="p-6">
                   <div className="flex items-center gap-3">
-                    <div className="bg-blue-500 p-3 rounded-full relative">
+                    <div className="bg-[#02595A] p-3 rounded-full relative">
                       <Thermometer className="w-6 h-6 text-white" />
-                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full"></div>
+                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#68DEC4] rounded-full"></div>
                     </div>
                     <div>
-                      <p className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>AI Temperature</p>
+                      <p className={`text-sm ${mutedText}`}>Temperature (demo)</p>
                       <p className="text-2xl font-bold">{vitalSigns.temperature}°C</p>
                     </div>
                   </div>
                   <Progress value={((vitalSigns.temperature - 35) / 5) * 100} className="mt-3" />
-                  <p className="text-xs text-green-600 mt-1">AI: Optimal</p>
+                  <p className="text-xs text-[#0a7a77] mt-1">Optimal</p>
                 </CardContent>
               </Card>
 
-              <Card className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
+              <Card className={cardCls}>
                 <CardContent className="p-6">
                   <div className="flex items-center gap-3">
-                    <div className="bg-green-500 p-3 rounded-full relative">
+                    <div className="bg-[#0a7a77] p-3 rounded-full relative">
                       <Activity className="w-6 h-6 text-white" />
-                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full"></div>
+                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#68DEC4] rounded-full"></div>
                     </div>
                     <div>
-                      <p className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>AI Oxygen Level</p>
+                      <p className={`text-sm ${mutedText}`}>Oxygen Level (demo)</p>
                       <p className="text-2xl font-bold">{vitalSigns.oxygenLevel}%</p>
                     </div>
                   </div>
                   <Progress value={vitalSigns.oxygenLevel} className="mt-3" />
-                  <p className="text-xs text-green-600 mt-1">AI: Excellent</p>
+                  <p className="text-xs text-[#0a7a77] mt-1">Excellent</p>
                 </CardContent>
               </Card>
 
-              <Card className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
+              <Card className={cardCls}>
                 <CardContent className="p-6">
                   <div className="flex items-center gap-3">
-                    <div className="bg-purple-500 p-3 rounded-full relative">
+                    <div className="bg-[#3bb9a0] p-3 rounded-full relative">
                       <Stethoscope className="w-6 h-6 text-white" />
-                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full"></div>
+                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#68DEC4] rounded-full"></div>
                     </div>
                     <div>
-                      <p className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>AI Blood Pressure</p>
+                      <p className={`text-sm ${mutedText}`}>Blood Pressure (demo)</p>
                       <p className="text-2xl font-bold">{vitalSigns.bloodPressure}</p>
                     </div>
                   </div>
-                  <div className="mt-3 text-sm text-green-600">AI: Normal Range</div>
+                  <div className="mt-3 text-sm text-[#0a7a77]">Normal range</div>
                 </CardContent>
               </Card>
             </div>
 
             {/* AI Health Analysis Results */}
             {aiHealthAnalysis && (
-              <Card className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
+              <Card className={cardCls}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Brain className="w-5 h-5 text-purple-500" />
+                    <Brain className="w-5 h-5 text-[#02595A]" />
                     AI Health Analysis Results
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-4 rounded-lg bg-gradient-to-r from-red-500/10 to-orange-500/10">
+                    <div className="p-4 rounded-lg bg-gradient-to-r from-[#FD7963]/10 to-orange-500/10">
                       <h4 className="font-semibold mb-2">AI Stress Analysis</h4>
                       <Progress value={aiHealthAnalysis.stressLevel} className="mb-2" />
                       <p className="text-sm">
@@ -1393,7 +1502,7 @@ message.content.steps ? (
                       </p>
                     </div>
 
-                    <div className="p-4 rounded-lg bg-gradient-to-r from-yellow-500/10 to-red-500/10">
+                    <div className="p-4 rounded-lg bg-gradient-to-r from-yellow-500/10 to-[#FD7963]/10">
                       <h4 className="font-semibold mb-2">AI Pain Detection</h4>
                       <Progress value={aiHealthAnalysis.painLevel} className="mb-2" />
                       <p className="text-sm">
@@ -1406,7 +1515,7 @@ message.content.steps ? (
                       </p>
                     </div>
 
-                    <div className="p-4 rounded-lg bg-gradient-to-r from-green-500/10 to-blue-500/10">
+                    <div className="p-4 rounded-lg bg-gradient-to-r from-[#68DEC4]/20 to-[#02595A]/10">
                       <h4 className="font-semibold mb-2">AI Wellness Score</h4>
                       <Progress value={aiHealthAnalysis.overallWellness} className="mb-2" />
                       <p className="text-sm">
@@ -1436,39 +1545,36 @@ message.content.steps ? (
               </Card>
             )}
 
-            <Card className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
+            <Card className={cardCls}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Bot className="w-5 h-5" />
+                  <Bot className="w-5 h-5 text-[#02595A]" />
                   AI Health Insights
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <Alert
-                    className={`${darkMode ? "bg-green-900/20 border-green-700" : "bg-green-50 border-green-200"}`}
-                  >
-                    <Bot className="h-4 w-4 text-green-600" />
-                    <AlertDescription className={`${darkMode ? "text-green-300" : "text-green-800"}`}>
-                      AI Analysis: Your vital signs are within normal ranges. The AI health monitoring system shows
-                      optimal performance across all metrics.
+                  <Alert className={darkMode ? "bg-[#02595A]/20 border-[#0a7a77]" : "bg-[#effaf7] border-[#68DEC4]"}>
+                    <Bot className="h-4 w-4 text-[#02595A]" />
+                    <AlertDescription className={darkMode ? "text-[#68DEC4]" : "text-[#02595A]"}>
+                      Sample insight (demo): these cards show how results will look once real sensors are connected.
                     </AlertDescription>
                   </Alert>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="text-center p-4 rounded-lg bg-gradient-to-r from-blue-500/10 to-purple-500/10">
-                      <Timer className="w-8 h-8 mx-auto mb-2 text-blue-500" />
-                      <p className="font-semibold">AI Last Scan</p>
+                    <div className="text-center p-4 rounded-lg bg-gradient-to-r from-[#02595A]/10 to-[#68DEC4]/10">
+                      <Timer className="w-8 h-8 mx-auto mb-2 text-[#02595A]" />
+                      <p className="font-semibold">Last Scan</p>
                       <p className="text-sm text-gray-500">2 minutes ago</p>
                     </div>
-                    <div className="text-center p-4 rounded-lg bg-gradient-to-r from-green-500/10 to-blue-500/10">
-                      <Shield className="w-8 h-8 mx-auto mb-2 text-green-500" />
-                      <p className="font-semibold">AI Health Score</p>
+                    <div className="text-center p-4 rounded-lg bg-gradient-to-r from-[#68DEC4]/10 to-[#02595A]/10">
+                      <Shield className="w-8 h-8 mx-auto mb-2 text-[#0a7a77]" />
+                      <p className="font-semibold">Health Score</p>
                       <p className="text-sm text-gray-500">Excellent (95/100)</p>
                     </div>
-                    <div className="text-center p-4 rounded-lg bg-gradient-to-r from-purple-500/10 to-pink-500/10">
-                      <Bell className="w-8 h-8 mx-auto mb-2 text-purple-500" />
-                      <p className="font-semibold">AI Alerts</p>
+                    <div className="text-center p-4 rounded-lg bg-gradient-to-r from-[#FD7963]/10 to-[#68DEC4]/10">
+                      <Bell className="w-8 h-8 mx-auto mb-2 text-[#FD7963]" />
+                      <p className="font-semibold">Alerts</p>
                       <p className="text-sm text-gray-500">None active</p>
                     </div>
                   </div>
@@ -1477,12 +1583,12 @@ message.content.steps ? (
             </Card>
           </TabsContent>
 
-          {/* Enhanced Clinics Tab with AI */}
+          {/* ---------------- CLINICS TAB ---------------- */}
           <TabsContent value="clinics" className="space-y-6">
             {showClinics && nearbyClinics.length > 0 ? (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 mb-4">
-                  <Bot className="w-5 h-5 text-blue-500" />
+                  <Bot className="w-5 h-5 text-[#02595A]" />
                   <h3 className="text-lg font-semibold">AI-Recommended Healthcare Facilities</h3>
                   <Badge variant="outline" className="text-xs">
                     Powered by Google Maps
@@ -1490,14 +1596,11 @@ message.content.steps ? (
                 </div>
 
                 {nearbyClinics.map((clinic) => (
-                  <Card
-                    key={clinic.id}
-                    className={`hover:shadow-lg transition-all duration-300 ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}
-                  >
+                  <Card key={clinic.id} className={`hover:shadow-lg transition-all duration-300 ${cardCls}`}>
                     <CardContent className="p-6">
                       <div className="flex justify-between items-start mb-4">
                         <div className="flex-1">
-                          <h3 className="font-semibold text-lg flex items-center gap-2">
+                          <h3 className="font-semibold text-lg flex flex-wrap items-center gap-2">
                             {clinic.name}
                             <div className="flex items-center">
                               {[...Array(5)].map((_, i) => (
@@ -1509,8 +1612,8 @@ message.content.steps ? (
                               <span className="ml-1 text-sm text-gray-500">({clinic.rating})</span>
                             </div>
                           </h3>
-                          <p className={`${darkMode ? "text-gray-400" : "text-gray-600"} text-sm`}>{clinic.address}</p>
-                          <div className="flex items-center gap-4 mt-2">
+                          <p className={`${mutedText} text-sm`}>{clinic.address}</p>
+                          <div className="flex flex-wrap items-center gap-4 mt-2">
                             <Badge variant={clinic.isOpen ? "default" : "secondary"} className="text-xs">
                               <Clock className="w-3 h-3 mr-1" />
                               {clinic.isOpen ? "Open" : "Closed"}
@@ -1525,21 +1628,25 @@ message.content.steps ? (
                           </div>
 
                           {clinic.aiRecommendation && (
-                            <Alert className="mt-3 bg-blue-50 border-blue-200">
-                              <Bot className="h-4 w-4 text-blue-600" />
-                              <AlertDescription className="text-blue-800 text-sm">
+                            <Alert
+                              className={`mt-3 ${darkMode ? "bg-[#02595A]/20 border-[#0a7a77]" : "bg-[#effaf7] border-[#68DEC4]"}`}
+                            >
+                              <Bot className="h-4 w-4 text-[#02595A]" />
+                              <AlertDescription className={`text-sm ${darkMode ? "text-[#68DEC4]" : "text-[#02595A]"}`}>
                                 <strong>AI Recommendation:</strong> {clinic.aiRecommendation}
                               </AlertDescription>
                             </Alert>
                           )}
                         </div>
                         <div className="text-right">
-                          <div className="text-lg font-semibold text-blue-600">{clinic.distance.toFixed(1)} km</div>
+                          <div className={`text-lg font-semibold ${darkMode ? "text-[#68DEC4]" : "text-[#02595A]"}`}>
+                            {clinic.distance.toFixed(1)} km
+                          </div>
                           <div className="text-xs text-gray-500">away</div>
                         </div>
                       </div>
 
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         <Button
                           size="sm"
                           variant="outline"
@@ -1572,14 +1679,13 @@ message.content.steps ? (
                               title: clinic.name,
                               text: `Check out this clinic: ${clinic.name}\nAddress: ${clinic.address}\nRating: ${clinic.rating}\nType: ${clinic.type}`,
                               url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clinic.address)}`,
-                            };
+                            }
                             if (navigator.share) {
-                              navigator.share(shareData).catch(() => {});
+                              navigator.share(shareData).catch(() => {})
                             } else {
-                              // Fallback: copy to clipboard
-                              const textToCopy = `${shareData.text}\n${shareData.url}`;
-                              navigator.clipboard.writeText(textToCopy);
-                              alert("Clinic info copied to clipboard!");
+                              const textToCopy = `${shareData.text}\n${shareData.url}`
+                              navigator.clipboard.writeText(textToCopy)
+                              alert("Clinic info copied to clipboard!")
                             }
                           }}
                         >
@@ -1592,21 +1698,22 @@ message.content.steps ? (
                 ))}
               </div>
             ) : (
-              <Card className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
+              <Card className={cardCls}>
                 <CardContent className="p-8 text-center">
-                  <Bot className="w-16 h-16 mx-auto mb-4 text-blue-500" />
+                  <Bot className="w-16 h-16 mx-auto mb-4 text-[#02595A]" />
                   <h3 className="text-lg font-semibold mb-2">AI-Powered Clinic Finder</h3>
-                  <p className={`${darkMode ? "text-gray-400" : "text-gray-600"} mb-4`}>
+                  <p className={`${mutedText} mb-4`}>
                     Allow location access to let our AI discover and recommend the best medical facilities near you
                   </p>
+                  {location.error && <p className="text-sm text-red-600 mb-4">{location.error}</p>}
                   <Button
                     onClick={getCurrentLocation}
                     disabled={location.loading}
-                    className={`flex items-center ml-96 mt-8 justify-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all duration-200
-    ${location.loading
-      ? "bg-gradient-to-r from-blue-300 to-purple-300 text-gray-100 cursor-not-allowed"
-      : "bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600"}
-  `}
+                    className={`mx-auto flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
+                      location.loading
+                        ? "bg-gradient-to-r from-[#02595A]/50 to-[#68DEC4]/50 text-gray-100 cursor-not-allowed"
+                        : `${BRAND_GRADIENT} ${BRAND_GRADIENT_HOVER} text-white`
+                    }`}
                   >
                     {location.loading ? (
                       <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -1620,19 +1727,16 @@ message.content.steps ? (
             )}
           </TabsContent>
 
-          {/* Enhanced Achievements Tab */}
+          {/* ---------------- ACHIEVEMENTS TAB ---------------- */}
           <TabsContent value="achievements" className="space-y-6">
             <div className="flex items-center gap-2 mb-4">
-              <Bot className="w-5 h-5 text-purple-500" />
-              <h3 className="text-lg font-semibold">AI-Powered Achievements</h3>
+              <Bot className="w-5 h-5 text-[#02595A]" />
+              <h3 className="text-lg font-semibold">{t.achievements}</h3>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {achievements.map((achievement) => (
-                <Card
-                  key={achievement.id}
-                  className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"} ${achievement.unlocked ? "ring-2 ring-yellow-400" : ""}`}
-                >
+                <Card key={achievement.id} className={`${cardCls} ${achievement.unlocked ? "ring-2 ring-[#68DEC4]" : ""}`}>
                   <CardContent className="p-6">
                     <div className="flex items-center gap-4">
                       <div className={`text-4xl ${achievement.unlocked ? "grayscale-0" : "grayscale"}`}>
@@ -1640,16 +1744,14 @@ message.content.steps ? (
                       </div>
                       <div className="flex-1">
                         <h3 className="font-semibold">{achievement.title}</h3>
-                        <p className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
-                          {achievement.description}
-                        </p>
+                        <p className={`text-sm ${mutedText}`}>{achievement.description}</p>
                         <div className="mt-2">
                           <Progress value={achievement.progress} className="h-2" />
                           <p className="text-xs text-gray-500 mt-1">{achievement.progress}% Complete</p>
                         </div>
                       </div>
                       {achievement.unlocked && (
-                        <Badge className="bg-yellow-500 text-yellow-900">
+                        <Badge className="bg-[#68DEC4] text-[#02595A]">
                           <Award className="w-3 h-3 mr-1" />
                           Unlocked
                         </Badge>
@@ -1661,13 +1763,13 @@ message.content.steps ? (
             </div>
           </TabsContent>
 
-          {/* Emergency Tab */}
+          {/* ---------------- EMERGENCY TAB (stays red on purpose) ---------------- */}
           <TabsContent value="emergency" className="space-y-6">
-            <Card className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
+            <Card className={cardCls}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="w-5 h-5" />
-                  Emergency Contacts
+                  {t.emergencyContacts}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -1679,7 +1781,7 @@ message.content.steps ? (
                     >
                       <div>
                         <h3 className="font-semibold">{contact.name}</h3>
-                        <p className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>{contact.relation}</p>
+                        <p className={`text-sm ${mutedText}`}>{contact.relation}</p>
                       </div>
                       <Button
                         size="sm"
@@ -1695,7 +1797,7 @@ message.content.steps ? (
               </CardContent>
             </Card>
 
-            <Card className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
+            <Card className={cardCls}>
               <CardHeader>
                 <CardTitle>Quick Emergency Actions</CardTitle>
               </CardHeader>
@@ -1703,116 +1805,89 @@ message.content.steps ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Button
                     size="lg"
-                     className="flex items-center justify-center gap-3 h-20 px-8 py-6 rounded-xl font-bold text-lg bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-lg hover:from-red-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-red-400 transition-all duration-200"
-                    onClick={() => window.open("tel:911", "_self")}
+                    className="flex items-center justify-center gap-3 h-20 px-8 py-6 rounded-xl font-bold text-lg bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-lg hover:from-red-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-red-400 transition-all duration-200"
+                    onClick={() => window.open(`tel:${EMERGENCY_NUMBER}`, "_self")}
                   >
                     <Phone className="w-6 h-6 mr-2" />
-                    Call 911
+                    Call {EMERGENCY_NUMBER}
                   </Button>
                   <Button
                     size="lg"
                     variant="outline"
-                    className="flex items-center justify-center gap-3 h-20 px-8 py-6 rounded-xl font-bold text-lg border-2 border-blue-500 text-blue-700 bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all duration-200"
-                    onClick={async () => {
-    if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser.");
-      return;
-    }
-    // Show loading or disable button if you want
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        const shareData = {
-          title: "Emergency Location",
-          text: `I need help! My live location: https://maps.google.com/?q=${latitude},${longitude}`,
-        };
-        if (navigator.share) {
-          navigator.share(shareData).catch(() => {});
-        } else {
-          navigator.clipboard.writeText(shareData.text);
-          alert("Location copied to clipboard!");
-        }
-      },
-       () => {
-        alert("Unable to retrieve your location. Please enable location services.");
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-  }}
->
-  <Share2 className="w-6 h-6 mr-2" />
-  Share Live Location
+                    className="flex items-center justify-center gap-3 h-20 px-8 py-6 rounded-xl font-bold text-lg border-2 border-[#02595A] text-[#02595A] bg-gradient-to-r from-[#effaf7] to-white hover:from-[#68DEC4]/30 hover:to-[#effaf7] focus:outline-none focus:ring-2 focus:ring-[#68DEC4] transition-all duration-200"
+                    onClick={shareLiveLocation}
+                  >
+                    <Share2 className="w-6 h-6 mr-2" />
+                    Share Live Location
                   </Button>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Enhanced Futuristic Features Tab with AI */}
+          {/* ---------------- AI TECH TAB ---------------- */}
           <TabsContent value="futuristic" className="space-y-6">
-            {/* AI-Powered Real-time Analysis */}
-            <Card className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
+            <DemoNotice darkMode={darkMode}>
+              <strong>Experimental / demo features:</strong> the drone, gesture, biometric, predictions, devices and
+              community network on this tab are samples. They are not connected to real services yet.
+            </DemoNotice>
+
+            <Card className={cardCls}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Brain className="w-5 h-5 text-purple-500" />
+                  <Brain className="w-5 h-5 text-[#02595A]" />
                   TensorFlow Real-time Health Analysis
                   {aiStatus.facial === "processing" && <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
+                  {/* LEFT: scan button stretched to the full height of the results column */}
+                  <div className="flex flex-col">
                     <Button
                       onClick={startFacialAnalysis}
                       disabled={isAnalyzingFace}
-                      className="w-full bg-gradient-to-r from-purple-500 to-pink-500"
+                      className={`w-full flex-1 min-h-[160px] flex flex-col items-center justify-center gap-3 text-base ${BRAND_GRADIENT} ${BRAND_GRADIENT_HOVER} text-white`}
                     >
                       {isAnalyzingFace ? (
                         <>
-                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          <Loader2 className="w-10 h-10 animate-spin" />
                           AI Analyzing Face...
                         </>
                       ) : (
                         <>
-                          <Eye className="w-4 h-4 mr-2" />
+                          <Eye className="w-10 h-10" />
                           Scan Face for AI Analysis
                         </>
                       )}
                     </Button>
-
-                    {isAnalyzingFace && (
-                      <div className="flex justify-center">
-                        <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
-                      </div>
-                    )}
                   </div>
 
+                  {/* RIGHT: results */}
                   <div className="space-y-4">
-                    <div className="p-4 rounded-lg bg-gradient-to-r from-red-500/10 to-orange-500/10">
+                    <div className="p-4 rounded-lg bg-gradient-to-r from-[#FD7963]/10 to-orange-500/10">
                       <h4 className="font-semibold mb-2 flex items-center gap-2">
                         <Bot className="w-4 h-4" />
                         AI Stress Level
                       </h4>
                       <Progress value={stressLevel} className="mb-2" />
                       <p className="text-sm">
-                        {stressLevel}% - AI Assessment:{" "}
-                        {stressLevel > 70 ? "High" : stressLevel > 40 ? "Moderate" : "Low"}
+                        {stressLevel}% - AI Assessment: {stressLevel > 70 ? "High" : stressLevel > 40 ? "Moderate" : "Low"}
                       </p>
                     </div>
 
-                    <div className="p-4 rounded-lg bg-gradient-to-r from-yellow-500/10 to-red-500/10">
+                    <div className="p-4 rounded-lg bg-gradient-to-r from-yellow-500/10 to-[#FD7963]/10">
                       <h4 className="font-semibold mb-2 flex items-center gap-2">
                         <Bot className="w-4 h-4" />
                         AI Pain Detection
                       </h4>
                       <Progress value={painLevel} className="mb-2" />
                       <p className="text-sm">
-                        {painLevel}% - AI Assessment:{" "}
-                        {painLevel > 70 ? "Severe" : painLevel > 40 ? "Moderate" : "Minimal"}
+                        {painLevel}% - AI Assessment: {painLevel > 70 ? "Severe" : painLevel > 40 ? "Moderate" : "Minimal"}
                       </p>
                     </div>
 
-                    <div className="p-4 rounded-lg bg-gradient-to-r from-green-500/10 to-blue-500/10">
+                    <div className="p-4 rounded-lg bg-gradient-to-r from-[#68DEC4]/20 to-[#02595A]/10">
                       <h4 className="font-semibold mb-2 flex items-center gap-2">
                         <Bot className="w-4 h-4" />
                         AI Wellness Score
@@ -1820,55 +1895,52 @@ message.content.steps ? (
                       <Progress value={mentalHealthScore} className="mb-2" />
                       <p className="text-sm">
                         {mentalHealthScore}/100 - AI Assessment:{" "}
-                        {mentalHealthScore > 80
-                          ? "Excellent"
-                          : mentalHealthScore > 60
-                            ? "Good"
-                            : "Needs Attention"}
+                        {mentalHealthScore > 80 ? "Excellent" : mentalHealthScore > 60 ? "Good" : "Needs Attention"}
                       </p>
                     </div>
                   </div>
+                </div>
 
-                  <div className="space-y-4">
-                    <Button
-                      onClick={enableGestureControl}
-                      variant={gestureControl ? "default" : "outline"}
-                      className="w-full"
-                    >
-                      {gestureControl ? "Disable Gesture Control" : "Enable Gesture Control"}
-                    </Button>
-                    <Button
-                      onClick={authenticateBiometric}
-                      variant={biometricAuth ? "default" : "outline"}
-                      className="w-full"
-                    >
-                      {biometricAuth ? "Authenticated" : "Authenticate with Biometric"}
-                    </Button>
-                  </div>
+                {/* BELOW: gesture + biometric, directly under the stretched scan button */}
+                <div className="mt-6 space-y-4 md:w-[calc(50%-0.75rem)]">
+                  <Button
+                    onClick={enableGestureControl}
+                    variant={gestureControl ? "default" : "outline"}
+                    className="w-full"
+                  >
+                    {gestureControl ? "Disable Gesture Control" : "Enable Gesture Control"}
+                  </Button>
+
+                  <Button
+                    onClick={authenticateBiometric}
+                    variant={biometricAuth ? "default" : "outline"}
+                    className="w-full"
+                  >
+                    {biometricAuth ? "Authenticated" : "Authenticate with Biometric"}
+                  </Button>
                 </div>
               </CardContent>
-            </Card >          
-             <Card
-              className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"} ${droneResponse ? "ring-2 ring-red-500 animate-bounce" : ""}`}
-            >
+            </Card>
+
+            <Card className={`${cardCls} ${droneResponse ? "ring-2 ring-red-500 animate-bounce" : ""}`}>
               <CardContent className="p-6 text-center">
                 <div className="bg-red-500 p-3 rounded-full w-fit mx-auto mb-3 relative">
                   <Plane className="w-6 h-6 text-white" />
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full"></div>
+                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#68DEC4] rounded-full"></div>
                 </div>
-                <h3 className="font-semibold mb-2">AI Drone Response</h3>
+                <h3 className="font-semibold mb-2">Drone Response (demo)</h3>
                 <Button size="sm" onClick={requestDroneResponse} variant="destructive" disabled={droneResponse}>
-                  {droneResponse ? "Dispatched" : "Request Drone"}
+                  {droneResponse ? "Requested" : "Request Drone"}
                 </Button>
               </CardContent>
             </Card>
 
-            {/* AI Health Predictions */}
-            <Card className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
+            {/* Health predictions */}
+            <Card className={cardCls}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Snowflake className="w-5 h-5 text-blue-500" />
-                  AI Health Predictions
+                  <Snowflake className="w-5 h-5 text-[#02595A]" />
+                  Health Predictions (demo)
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -1889,19 +1961,19 @@ message.content.steps ? (
                                 : "secondary"
                           }
                         >
-                          {prediction.probability}% AI Risk
+                          {prediction.probability}% Risk
                         </Badge>
                       </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{prediction.timeframe}</p>
-                      <p className="text-sm font-medium text-green-600 dark:text-green-400">
-                        🤖 AI Recommendation: {prediction.prevention}
+                      <p className={`text-sm mb-2 ${mutedText}`}>{prediction.timeframe}</p>
+                      <p className={`text-sm font-medium ${darkMode ? "text-[#68DEC4]" : "text-[#02595A]"}`}>
+                        🤖 Suggestion: {prediction.prevention}
                       </p>
                     </div>
                   ))}
                 </div>
                 <Button
                   onClick={startAIHealthCoach}
-                  className="w-full mt-4 bg-gradient-to-r from-blue-500 to-purple-500"
+                  className={`w-full mt-4 ${BRAND_GRADIENT} ${BRAND_GRADIENT_HOVER} text-white`}
                 >
                   <Brain className="w-4 h-4 mr-2" />
                   Activate AI Health Coach
@@ -1909,12 +1981,12 @@ message.content.steps ? (
               </CardContent>
             </Card>
 
-            {/* Community Emergency Network */}
-            <Card className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
+            {/* Community network */}
+            <Card className={cardCls}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5 text-green-500" />
-                  AI-Powered Community Emergency Network
+                  <Users className="w-5 h-5 text-[#02595A]" />
+                  Community Emergency Network (demo)
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -1922,19 +1994,19 @@ message.content.steps ? (
                   {communityHelpers.map((helper, index) => (
                     <div
                       key={index}
-                      className="flex items-center justify-between p-4 rounded-lg bg-gradient-to-r from-green-500/10 to-blue-500/10"
+                      className="flex items-center justify-between p-4 rounded-lg bg-gradient-to-r from-[#68DEC4]/15 to-[#02595A]/10"
                     >
                       <div className="flex items-center gap-3">
                         <div
-                          className={`w-3 h-3 rounded-full ${helper.available ? "bg-green-500" : "bg-red-500"}`}
+                          className={`w-3 h-3 rounded-full ${helper.available ? "bg-[#68DEC4]" : "bg-[#FD7963]"}`}
                         ></div>
                         <div>
                           <h4 className="font-semibold flex items-center gap-2">
                             <Bot className="w-4 h-4" />
                             {helper.name}
                           </h4>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {helper.specialty} • {helper.distance} • AI Verified
+                          <p className={`text-sm ${mutedText}`}>
+                            {helper.specialty} • {helper.distance}
                           </p>
                         </div>
                       </div>
@@ -1943,7 +2015,7 @@ message.content.steps ? (
                         disabled={!helper.available}
                         variant={helper.available ? "default" : "secondary"}
                       >
-                        {helper.available ? "AI Connect" : "Busy"}
+                        {helper.available ? "Connect" : "Busy"}
                       </Button>
                     </div>
                   ))}
@@ -1951,45 +2023,48 @@ message.content.steps ? (
               </CardContent>
             </Card>
 
-            {/* Smart Device Integration */}
-            <Card className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
+            {/* Smart devices */}
+            <Card className={cardCls}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Smartphone className="w-5 h-5 text-purple-500" />
-                  AI Smart Device Integration
+                  <Smartphone className="w-5 h-5 text-[#02595A]" />
+                  Smart Device Integration (demo)
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {smartDevices.map((device, index) => (
-                    <div key={index} className="mb-4 p-2 rounded bg-gray-50 dark:bg-gray-900">
+                    <div
+                      key={index}
+                      className={`mb-4 p-2 rounded ${darkMode ? "bg-gray-900" : "bg-gray-50"}`}
+                    >
                       <div className="flex items-center justify-between mb-2">
                         <h4 className="font-semibold flex items-center gap-2">
                           <Bot className="w-4 h-4" />
                           {device.name}
                         </h4>
                         <div
-                          className={`w-3 h-3 rounded-full ${device.connected ? "bg-green-500" : "bg-red-500"}`}
+                          className={`w-3 h-3 rounded-full ${device.connected ? "bg-[#68DEC4]" : "bg-[#FD7963]"}`}
                         ></div>
                       </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">AI Battery: {device.battery}%</p>
-                      <p className="text-xs text-gray-500">Last AI sync: {device.lastSync}</p>
+                      <p className={`text-sm mb-1 ${mutedText}`}>Battery: {device.battery}%</p>
+                      <p className="text-xs text-gray-500">Last sync: {device.lastSync}</p>
                       <Progress value={device.battery} className="mt-2" />
                     </div>
                   ))}
                 </div>
                 <Button onClick={analyzeEnvironment} className="w-full mt-4" variant="outline">
                   <Thermometer className="w-4 h-4 mr-2" />
-                  AI Analyze Environment
+                  Analyze Environment
                 </Button>
               </CardContent>
             </Card>
 
             {aiCoachMessages.length > 0 && (
-              <Card className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
+              <Card className={cardCls}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Bell className="w-5 h-5 text-yellow-500" />
+                    <Bell className="w-5 h-5 text-[#FD7963]" />
                     AI Coach Messages
                   </CardTitle>
                 </CardHeader>
@@ -1998,10 +2073,10 @@ message.content.steps ? (
                     {aiCoachMessages.map((message, index) => (
                       <Alert
                         key={index}
-                        className={`${darkMode ? "bg-yellow-900/20 border-yellow-700" : "bg-yellow-50 border-yellow-200"}`}
+                        className={darkMode ? "bg-yellow-900/20 border-yellow-700" : "bg-yellow-50 border-yellow-200"}
                       >
                         <Bot className="h-4 w-4 text-yellow-600" />
-                        <AlertDescription className={`${darkMode ? "text-yellow-300" : "text-yellow-800"}`}>
+                        <AlertDescription className={darkMode ? "text-yellow-300" : "text-yellow-800"}>
                           {message}
                         </AlertDescription>
                       </Alert>
@@ -2012,23 +2087,23 @@ message.content.steps ? (
             )}
 
             {environmentalAlerts.length > 0 && (
-              <Card className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}`}>
+              <Card className={cardCls}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <AlertTriangle className="w-5 h-5 text-orange-500" />
-                    AI Environmental Alerts
+                    Environmental Alerts
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    {environmentalAlerts.map((alert, index) => (
+                    {environmentalAlerts.map((alertText, index) => (
                       <Alert
                         key={index}
-                        className={`${darkMode ? "bg-orange-900/20 border-orange-700" : "bg-orange-50 border-orange-200"}`}
+                        className={darkMode ? "bg-orange-900/20 border-orange-700" : "bg-orange-50 border-orange-200"}
                       >
                         <Bot className="h-4 w-4 text-orange-600" />
-                        <AlertDescription className={`${darkMode ? "text-orange-300" : "text-orange-800"}`}>
-                          {alert}
+                        <AlertDescription className={darkMode ? "text-orange-300" : "text-orange-800"}>
+                          {alertText}
                         </AlertDescription>
                       </Alert>
                     ))}
@@ -2040,7 +2115,6 @@ message.content.steps ? (
         </Tabs>
       </div>
     </div>
-  
   )
 }
 
@@ -2051,7 +2125,6 @@ async function getFirstAidStepsFromBackend(condition, targetLanguage = "en") {
   const response = await fetch("http://localhost:5000/api/first-aid-steps", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
       condition,
       target_language: targetLanguage,
     }),
