@@ -1,7 +1,7 @@
-
+import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-
+from src.clinic_search import find_nearby_clinics
 from src.crew import Afyabuddy
 
 app = Flask(__name__)
@@ -67,31 +67,28 @@ def translate():
 def find_clinics():
     data = get_json_body()
 
-    location = data.get("location", "").strip()
     latitude = data.get("latitude")
     longitude = data.get("longitude")
 
-    if not location and (latitude is None or longitude is None):
+    if latitude is None or longitude is None:
         return jsonify({
-            "error": "Provide a location or both latitude and longitude."
+            "error": "Both latitude and longitude are required."
         }), 400
 
     try:
-        if latitude is not None and longitude is not None:
-            latitude = float(latitude)
-            longitude = float(longitude)
+        latitude = float(latitude)
+        longitude = float(longitude)
 
-            if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
-                return jsonify({"error": "Invalid coordinates."}), 400
+        if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+            return jsonify({"error": "Invalid coordinates."}), 400
 
-        result = ai.run_find_clinic(
-            location=location or f"{latitude}, {longitude}",
-            latitude=latitude,
-            longitude=longitude,
-        )
-        return jsonify({"result": result}), 200
+        clinics = find_nearby_clinics(latitude, longitude)
+        return jsonify({"clinics": clinics}), 200
     except (ValueError, TypeError):
         return jsonify({"error": "Latitude and longitude must be valid numbers."}), 400
+    except requests.RequestException:
+        app.logger.exception("Overpass request failed")
+        return jsonify({"error": "Clinic search service unavailable."}), 502
     except Exception:
         app.logger.exception("Clinic finder failed")
         return jsonify({"error": "Unable to find nearby clinics."}), 500

@@ -51,8 +51,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 
 // Import AI services
 import {
-  getMedicalAdviceOpenAI,
-  findNearbyClinicsMaps,
   translateTextGoogle,
   analyzeFacialHealthTensorFlow,
 } from "./lib/ai-services"
@@ -74,7 +72,7 @@ const TAB_CLASS =
   "flex items-center justify-center gap-2 data-[state=active]:bg-[#02595A] data-[state=active]:text-white"
 
 // Where your backend lives. Set VITE_BACKEND_URL in a .env file to change it.
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://afyabuddy-backend-2.onrender.com"
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:5000"
 
 // Kenya emergency numbers
 const EMERGENCY_NUMBER = "999"
@@ -150,6 +148,65 @@ const DemoNotice = ({ darkMode, children }) => (
   </Alert>
 )
 
+/* ------------------------------------------------------------------ */
+/*  FIRST AID: backend call + response cleanup                         */
+/* ------------------------------------------------------------------ */
+
+// The agent can return its JSON as a string wrapped in ```json fences, with steps
+// already numbered ("1. Wash...") and lists that are sometimes strings, arrays, or
+// objects like { signs_of_infection: [...] }. These helpers turn any of that into
+// one clean object that React can always render.
+const toList = (value) => {
+  if (value === null || value === undefined || value === "") return []
+  if (Array.isArray(value)) return value.flatMap(toList)
+  if (typeof value === "object") return Object.values(value).flatMap(toList)
+  return [String(value)]
+}
+
+const stripNumber = (s) => String(s).replace(/^\s*\d+[.)]\s*/, "")
+
+const normalizeFirstAid = (raw) => {
+  let data = raw
+
+  // Unwrap { result: ... } style envelopes
+  if (data && typeof data === "object" && !Array.isArray(data) && !data.steps) {
+    data = data.result ?? data.raw ?? data.output ?? data.final_answer ?? data
+  }
+
+  // Parse JSON strings (with or without code fences)
+  if (typeof data === "string") {
+    const cleaned = data
+      .replace(/^[\s\S]*?```(?:json)?\s*/i, "")
+      .replace(/\s*```[\s\S]*$/, "")
+      .trim()
+    try {
+      data = JSON.parse(cleaned)
+    } catch {
+      const start = data.indexOf("{")
+      const end = data.lastIndexOf("}")
+      try {
+        data = JSON.parse(data.slice(start, end + 1))
+      } catch {
+        return null
+      }
+    }
+  }
+
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null
+
+  return {
+    ...data,
+    title: typeof data.title === "string" ? data.title : toList(data.title).join(" "),
+    immediate_danger: toList(data.immediate_danger),
+    steps: toList(data.steps).map(stripNumber),
+    do_not: toList(data.do_not),
+    seek_help_if: toList(data.seek_help_if),
+    symptoms: toList(data.symptoms),
+    recommendations: toList(data.recommendations),
+    sources: toList(data.sources),
+  }
+}
+
 async function getFirstAidStepsFromBackend(condition, targetLanguage = "en") {
   const response = await fetch(`${BACKEND_URL}/api/first-aid-steps`, {
     method: "POST",
@@ -157,7 +214,7 @@ async function getFirstAidStepsFromBackend(condition, targetLanguage = "en") {
     body: JSON.stringify({ condition, target_language: targetLanguage }),
   })
   if (!response.ok) throw new Error("Failed to fetch first aid steps")
-  return await response.json()
+  return normalizeFirstAid(await response.json())
 }
 
 async function getTranslationFromBackend(text, targetLanguage) {
@@ -170,8 +227,100 @@ async function getTranslationFromBackend(text, targetLanguage) {
   return await response.json()
 }
 
+/* ------------------------------------------------------------------ */
+/*  CLINICS: backend call + response cleanup                           */
+/* ------------------------------------------------------------------ */
+
+// Straight-line distance in km, used only if the backend doesn't send one
+const haversineKm = (lat1, lng1, lat2, lng2) => {
+  const toRad = (d) => (d * Math.PI) / 180
+  const R = 6371
+  const dLat = toRad(lat2 - lat1)
+  const dLng = toRad(lng2 - lng1)
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(a))
+}
+
+// Parses JSON that may be wrapped in ```json fences or surrounded by extra text
+const parseJsonLoose = (value) => {
+  if (typeof value !== "string") return value
+  const text = value.replace(/```(?:json)?/gi, "").trim()
+  try {
+    return JSON.parse(text)
+  } catch {
+    // fall through to extracting the JSON portion
+  }
+  const starts = [text.indexOf("["), text.indexOf("{")].filter((i) => i !== -1)
+  if (starts.length === 0) return null
+  const end = Math.max(text.lastIndexOf("]"), text.lastIndexOf("}"))
+  try {
+    return JSON.parse(text.slice(Math.min(...starts), end + 1))
+  } catch {
+    return null
+  }
+}
+
+// Turns whatever the backend returns into the exact shape the Clinics tab renders.
+// Accepts an array, or an object like { clinics: [...] } / { results: [...] } / { result: "<json string>" }.
+const normalizeClinics = (raw, userLat, userLng) => {
+  let data = parseJsonLoose(raw)
+
+  // Unwrap envelopes: { result: "<json string>" } -> string -> { clinics: [...] } -> array
+  for (let i = 0; i < 4 && data && !Array.isArray(data); i++) {
+    if (typeof data === "string") {
+      data = parseJsonLoose(data)
+    } else if (typeof data === "object") {
+      data = data.clinics ?? data.results ?? data.data ?? data.result ?? data.raw ?? data.output ?? null
+    } else {
+      break
+    }
+  }
+  if (!Array.isArray(data)) return []
+
+  return data
+    .map((c, i) => {
+      const lat = Number(c.coordinates?.lat ?? c.lat ?? c.latitude ?? c.location?.lat)
+      const lng = Number(c.coordinates?.lng ?? c.lng ?? c.longitude ?? c.location?.lng)
+      const hasCoords = Number.isFinite(lat) && Number.isFinite(lng)
+
+      let distance = Number(c.distance ?? c.distance_km)
+      if (!Number.isFinite(distance)) {
+        distance = hasCoords ? haversineKm(userLat, userLng, lat, lng) : 0
+      }
+
+      const rating = Number(c.rating)
+
+      return {
+        id: String(c.id ?? c.place_id ?? i),
+        name: c.name ?? "Unnamed facility",
+        address: c.address ?? c.vicinity ?? "",
+        phone: c.phone ?? c.phone_number ?? "",
+        type: c.type ?? "Healthcare Facility",
+        isOpen: Boolean(c.isOpen ?? c.is_open ?? c.open_now),
+        rating: Number.isFinite(rating) ? rating : 0,
+        distance,
+        coordinates: hasCoords ? { lat, lng } : null,
+        aiRecommendation: c.aiRecommendation ?? c.ai_recommendation ?? c.recommendation ?? "",
+        specializations: toList(c.specializations),
+      }
+    })
+    .sort((a, b) => a.distance - b.distance)
+}
+
+async function getNearbyClinicsFromBackend(latitude, longitude) {
+  const response = await fetch(`${BACKEND_URL}/api/find-clinics`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ latitude, longitude }),
+  })
+  if (!response.ok) throw new Error("Failed to fetch nearby clinics")
+  return normalizeClinics(await response.json(), latitude, longitude)
+}
+
 function FirstAidInstructions({ data, darkMode }) {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
 
   return (
     <div>
@@ -179,18 +328,18 @@ function FirstAidInstructions({ data, darkMode }) {
         <h3 className={`font-bold mb-2 text-lg ${darkMode ? "text-yellow-300" : "text-[#02595A]"}`}>{data.title}</h3>
       )}
 
-      {data.symptoms && (
+      {data.immediate_danger?.length > 0 && (
         <div className="mb-2">
-          <span className="font-semibold text-sm">Symptoms:</span>
+          <span className="font-semibold text-sm">Immediate Danger:</span>
           <ul className="list-disc list-inside ml-4 text-sm">
-            {data.symptoms.map((s, i) => (
-              <li key={i}>{s}</li>
+            {data.immediate_danger.map((d, i) => (
+              <li key={i}>{d}</li>
             ))}
           </ul>
         </div>
       )}
 
-      {data.steps && (
+      {data.steps?.length > 0 && (
         <div className="mb-2">
           <span className="font-semibold text-sm">Steps:</span>
           <ol className="list-decimal list-inside ml-4 text-sm">
@@ -201,7 +350,7 @@ function FirstAidInstructions({ data, darkMode }) {
         </div>
       )}
 
-      {data.do_not && (
+      {data.do_not?.length > 0 && (
         <div className="mb-2">
           <span className="font-semibold text-sm text-red-600">Do NOT:</span>
           <ul className="list-disc list-inside ml-4 text-sm text-red-500">
@@ -212,7 +361,7 @@ function FirstAidInstructions({ data, darkMode }) {
         </div>
       )}
 
-      {data.seek_help_if && (
+      {data.seek_help_if?.length > 0 && (
         <div className="mb-2">
           <span className="font-semibold text-sm text-orange-600">Seek help if:</span>
           <ul className="list-disc list-inside ml-4 text-sm text-orange-500">
@@ -223,7 +372,18 @@ function FirstAidInstructions({ data, darkMode }) {
         </div>
       )}
 
-      {data.recommendations && (
+      {data.symptoms?.length > 0 && (
+        <div className="mb-2">
+          <span className="font-semibold text-sm">Watch for these signs:</span>
+          <ul className="list-disc list-inside ml-4 text-sm">
+            {data.symptoms.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {data.recommendations?.length > 0 && (
         <div className="mb-2">
           <span className="font-semibold text-sm text-[#02595A]">Recommendations:</span>
           <ul className="list-disc list-inside ml-4 text-sm text-[#0a7a77]">
@@ -234,15 +394,19 @@ function FirstAidInstructions({ data, darkMode }) {
         </div>
       )}
 
-      {typeof data.confidence === "number" && (
-        <div className="mt-2 text-xs text-gray-500">
-          <span>AI Confidence: {(data.confidence * 100).toFixed(0)}%</span>
+      {data.sources?.length > 0 && (
+        <div className="mb-2">
+          <span className="font-semibold text-sm">Sources:</span>
+          <ul className="list-disc list-inside ml-4 text-sm">
+            {data.sources.map((source, i) => (
+              <li key={i}>{source}</li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
-  )
+  );
 }
-
 const App = () => {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState("")
@@ -260,7 +424,6 @@ const App = () => {
 
   // AI service status indicators
   const [aiStatus, setAiStatus] = useState({
-    medical: "ready",
     location: "ready",
     translation: "ready",
     facial: "ready",
@@ -317,8 +480,8 @@ const App = () => {
   const [isEmergencyMode, setIsEmergencyMode] = useState(false)
   const [sosCountdown, setSosCountdown] = useState(0)
 
-  // Enhanced AI-powered features
-  const [cameraStream, setCameraStream] = useState(null)
+  // AI-powered features
+  const [, setCameraStream] = useState(null) // we only need the setter
   const [isAnalyzingFace, setIsAnalyzingFace] = useState(false)
   const [aiHealthAnalysis, setAiHealthAnalysis] = useState(null)
   const [stressLevel, setStressLevel] = useState(0)
@@ -449,7 +612,7 @@ const App = () => {
     setIsLoading(true)
     getFirstAidStepsFromBackend(lastFirstAidQuery, selectedLanguage)
       .then((data) => {
-        if (data && data.steps) {
+        if (data && data.steps?.length) {
           setMessages([
             ...newMessages,
             {
@@ -649,45 +812,26 @@ How can I assist you today? You can ask questions, upload images, or use voice c
     try {
       setAiStatus((prev) => ({ ...prev, location: "processing" }))
 
-      const result = await findNearbyClinicsMaps({ latitude: userLat, longitude: userLng }, "general", "normal")
+      const clinics = await getNearbyClinicsFromBackend(userLat, userLng)
+      if (clinics.length === 0) throw new Error("No clinics returned")
 
       setAiStatus((prev) => ({ ...prev, location: "ready" }))
-
-      if (result.success) {
-        setNearbyClinics(result.clinics)
-        setShowClinics(true)
-
-        setAchievements((prev) =>
-          prev.map((achievement) =>
-            achievement.id === "4" ? { ...achievement, unlocked: true, progress: 100 } : achievement,
-          ),
-        )
-      } else {
-        throw new Error(result.error)
-      }
-    } catch (error) {
-      console.error("AI clinic finding failed:", error)
-      setAiStatus((prev) => ({ ...prev, location: "error" }))
-
-      // Fallback clinic data
-      const fallbackClinics = [
-        {
-          id: "1",
-          name: "Nairobi Hospital",
-          address: "Argwings Kodhek Rd, Nairobi",
-          phone: "+254-20-2845000",
-          type: "General Hospital",
-          isOpen: true,
-          rating: 4.5,
-          distance: 2.1,
-          coordinates: { lat: -1.3067, lng: 36.7906 },
-          aiRecommendation: "Major hospital with comprehensive emergency services",
-          specializations: ["Emergency Medicine", "Surgery", "Internal Medicine"],
-        },
-      ]
-
-      setNearbyClinics(fallbackClinics)
+      setNearbyClinics(clinics)
       setShowClinics(true)
+
+      setAchievements((prev) =>
+        prev.map((achievement) =>
+          achievement.id === "4" ? { ...achievement, unlocked: true, progress: 100 } : achievement,
+        ),
+      )
+    } catch (error) {
+      console.error("Backend clinic search failed:", error)
+      setAiStatus((prev) => ({ ...prev, location: "error" }))
+      setShowClinics(false)
+      setLocation((prev) => ({
+        ...prev,
+        error: "Couldn't load nearby clinics. Please try again, or call 999 in an emergency.",
+      }))
     }
   }
 
@@ -702,158 +846,76 @@ How can I assist you today? You can ask questions, upload images, or use voice c
     }
   }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (!input.trim() && !uploadedImage) return
+ const handleSubmit = async (e) => {
+  e.preventDefault();
+  if (!input.trim() && !uploadedImage) return;
 
-    const userMessage = {
-      id: Date.now().toString(),
-      type: "user",
-      content: input || "Image uploaded for AI analysis",
-      image: uploadedImage || undefined,
-      timestamp: new Date(),
-      isVoice: isListening,
-    }
+  const userMessage = {
+    id: Date.now().toString(),
+    type: "user",
+    content: input || "Image uploaded for AI analysis",
+    image: uploadedImage || undefined,
+    timestamp: new Date(),
+    isVoice: isListening,
+  };
 
-    setMessages((prev) => [...prev, userMessage])
-    setIsLoading(true)
-    setInput("")
-    setUploadedImage(null)
+  setMessages((prev) => [...prev, userMessage]);
+  setIsLoading(true);
+  setInput("");
+  setUploadedImage(null);
 
-    // --- Translation command: "translate: hello to sw" ---
-    const translationRegex = /^translate:\s*(.+)\s+to\s+([a-zA-Z-]+)$/i
-    const translationMatch = userMessage.content.match(translationRegex)
+  try {
+    // Fetch first aid steps from the backend
+    const data = await getFirstAidStepsFromBackend(userMessage.content, selectedLanguage);
 
-    if (translationMatch) {
-      const textToTranslate = translationMatch[1]
-      const targetLang = translationMatch[2]
-
-      try {
-        const data = await getTranslationFromBackend(textToTranslate, targetLang)
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: (Date.now() + 1).toString(),
-            type: "assistant",
-            content: `**Original:** ${data.original}\n**Translated (${data.target_language}):** ${data.translated}`,
-            timestamp: new Date(),
-            isAI: true,
-          },
-        ])
-      } catch {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: (Date.now() + 1).toString(),
-            type: "assistant",
-            content: "Sorry, I couldn't fetch the translation. Please try again.",
-            timestamp: new Date(),
-            isAI: true,
-            isError: true,
-          },
-        ])
-      }
-      setIsLoading(false)
-      return
-    }
-
-    // --- First aid lookup from your backend (text-only questions) ---
-    // If it finds steps, we show them. If not (or if it fails), we fall through to OpenAI below.
-    if (!userMessage.image) {
-      try {
-        const data = await getFirstAidStepsFromBackend(userMessage.content, selectedLanguage)
-        if (data && data.steps) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: (Date.now() + 1).toString(),
-              type: "assistant",
-              content: data,
-              timestamp: new Date(),
-              isAI: true,
-            },
-          ])
-          setLastFirstAidQuery(userMessage.content)
-          setIsLoading(false)
-          return
-        }
-      } catch (error) {
-        console.error("First aid backend failed, trying OpenAI:", error)
-      }
-    }
-
-    // --- Otherwise, use OpenAI medical advice ---
-    try {
-      setAiStatus((prev) => ({ ...prev, medical: "processing" }))
-
-      const result = await getMedicalAdviceOpenAI(userMessage.content, userMessage.image, selectedLanguage)
-
-      setAiStatus((prev) => ({ ...prev, medical: "ready" }))
-
-      let assistantMessage
-
-      if (result.success) {
-        assistantMessage = {
-          id: (Date.now() + 1).toString(),
-          type: "assistant",
-          content: result.advice,
-          timestamp: new Date(),
-          isAI: true,
-          confidence: result.confidence,
-          urgencyLevel: result.urgencyLevel,
-          recommendations: result.recommendations,
-        }
-
-        setAchievements((prev) =>
-          prev.map((achievement) =>
-            achievement.id === "1" && achievement.progress < 100
-              ? { ...achievement, progress: 100, unlocked: true }
-              : achievement,
-          ),
-        )
-
-        // Auto-request location for urgent cases
-        if (result.urgencyLevel === "high") {
-          setTimeout(() => {
-            getCurrentLocation()
-          }, 1000)
-        }
-      } else {
-        assistantMessage = {
-          id: (Date.now() + 1).toString(),
-          type: "assistant",
-          content: result.error + "\n\n" + (result.fallbackAdvice || "Please try again or contact emergency services."),
-          timestamp: new Date(),
-          isAI: true,
-          isError: true,
-        }
-      }
-
-      setMessages((prev) => [...prev, assistantMessage])
-      setIsLoading(false)
-
-      if (voiceEnabled && assistantMessage.content) {
-        speakText(assistantMessage.content.replace(/[🩹🔥🦴🫁💡🤖]/gu, ""))
-      }
-    } catch (error) {
-      console.error("AI consultation failed:", error)
-      setAiStatus((prev) => ({ ...prev, medical: "error" }))
-
+    if (data && data.steps?.length) {
+      // Add the detailed response to the messages
       setMessages((prev) => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
           type: "assistant",
-          content:
-            "🤖 I'm experiencing technical difficulties. Please try again or contact emergency services if this is urgent.",
+          content: data, // Pass the entire response object
+          timestamp: new Date(),
+          isAI: true,
+        },
+      ]);
+      setLastFirstAidQuery(userMessage.content);
+
+      // Read the first aid steps aloud
+      const stepsText = `Here are the first aid steps: ${data.steps.join(", ")}`;
+      speakText(stepsText);
+    } else {
+      // Fallback to general guidance if no steps are returned
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          type: "assistant",
+          content: "No specific steps found. Please try again.",
           timestamp: new Date(),
           isAI: true,
           isError: true,
         },
-      ])
-      setIsLoading(false)
+      ]);
     }
+  } catch (error) {
+    console.error("Error fetching first aid steps:", error);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: (Date.now() + 1).toString(),
+        type: "assistant",
+        content: "Unable to fetch first aid steps. Please try again later.",
+        timestamp: new Date(),
+        isAI: true,
+        isError: true,
+      },
+    ]);
+  } finally {
+    setIsLoading(false);
   }
+};
 
   const startFacialAnalysis = async () => {
     try {
@@ -999,24 +1061,12 @@ How can I assist you today? You can ask questions, upload images, or use voice c
     )
   }
 
-  // Example: Use getTranslation to fetch a translated title and display it
-  const [translatedTitle, setTranslatedTitle] = useState("AI Medical Consultation");
-
-  useEffect(() => {
-    getTranslation({
-      key: "title",
-      selectedLanguage,
-      translations,
-      setAiStatus,
-      translateTextGoogle,
-    }).then(setTranslatedTitle)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedLanguage])
-
-
-
+  /* -------------------------- RENDER -------------------------- */
 
   return (
+    <div
+      className={`min-h-screen transition-all duration-500 ${
+        darkMode ? "bg-gradient-to-br from-gray-900 to-[#02595A] text-white" : "bg-gradient-to-br from-[#effaf7] to-white"
       }`}
     >
       {/* Header */}
@@ -1046,7 +1096,6 @@ How can I assist you today? You can ask questions, upload images, or use voice c
               <div>
                 <p className={`text-sm ${darkMode ? "text-gray-300" : "text-[#02595A]"}`}>{t.subtitle}</p>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                  <AIStatusIndicator status={aiStatus.medical} label="OpenAI" />
                   <AIStatusIndicator status={aiStatus.location} label="Google Maps" />
                   <AIStatusIndicator status={aiStatus.translation} label="Translate" />
                   <AIStatusIndicator status={aiStatus.facial} label="TensorFlow" />
@@ -1257,17 +1306,11 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                             className="max-w-full h-32 object-cover rounded mb-2"
                           />
                         )}
-{typeof message.content === "object" &&
-message.content !== null &&
-message.content.steps ? (
-  <FirstAidInstructions data={message.content} darkMode={darkMode} />
-) : (
-  <p className="text-sm whitespace-pre-wrap">
-    {typeof message.content === "string"
-      ? message.content
-      : message.content?.result || JSON.stringify(message.content)}
-  </p>
-)}
+                        {typeof message.content === "object" && message.content.steps ? (
+                          <FirstAidInstructions data={message.content} darkMode={darkMode} />
+                        ) : (
+                          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                        )}
 
                         <div className="flex gap-2 mt-2 flex-wrap">
                           {message.isVoice && (
@@ -1659,12 +1702,12 @@ message.content.steps ? (
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() =>
-                            window.open(
-                              `https://www.google.com/maps/dir/?api=1&destination=${clinic.coordinates.lat},${clinic.coordinates.lng}`,
-                              "_blank",
-                            )
-                          }
+                          onClick={() => {
+                            const destination = clinic.coordinates
+                              ? `${clinic.coordinates.lat},${clinic.coordinates.lng}`
+                              : encodeURIComponent(clinic.address)
+                            window.open(`https://www.google.com/maps/dir/?api=1&destination=${destination}`, "_blank")
+                          }}
                           className="flex items-center gap-1"
                         >
                           <Navigation className="w-3 h-3" />
@@ -2118,132 +2161,4 @@ message.content.steps ? (
   )
 }
 
-export default App;
-
-
-async function getFirstAidStepsFromBackend(condition, targetLanguage = "en") {
-  const response = await fetch("http://localhost:5000/api/first-aid-steps", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-      condition,
-      target_language: targetLanguage,
-    }),
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || "Failed to fetch first aid steps");
-  }
-
-  // Support either a structured response or a text result from CrewAI.
-  let result = data.result ?? data;
-
-  if (typeof result === "string") {
-    try {
-      result = JSON.parse(result);
-    } catch {
-      return { title: "First Aid Guidance", result };
-    }
-  }
-
-  return result;
-}
-
-
-async function getTranslationFromBackend(text, targetLanguage) {
-  const response = await fetch("http://localhost:5000/api/translate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      text,
-      target_language: targetLanguage,
-    }),
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || "Failed to translate text");
-  }
-
-  return {
-    original: text,
-    translated: data.translated_text ?? data.result ?? data,
-    target_language: targetLanguage,
-  };
-}
-
-function FirstAidInstructions({ data, darkMode }) {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
-
-  return (
-    <div>
-      {data.title && (
-        <h3 className={`font-bold mb-2 text-lg ${darkMode ? "text-yellow-300" : "text-red-700"}`}>{data.title}</h3>
-      )}
-
-      {data.symptoms && (
-        <div className="mb-2">
-          <span className="font-semibold text-sm">Symptoms:</span>
-          <ul className="list-disc list-inside ml-4 text-sm">
-            {data.symptoms.map((s, i) => (
-              <li key={i}>{s}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {data.steps && (
-        <div className="mb-2">
-          <span className="font-semibold text-sm">Steps:</span>
-          <ol className="list-decimal list-inside ml-4 text-sm">
-            {data.steps.map((step, i) => (
-              <li key={i}>{step}</li>
-            ))}
-          </ol>
-        </div>
-      )}
-
-      {data.do_not && (
-        <div className="mb-2">
-          <span className="font-semibold text-sm text-red-600">Do NOT:</span>
-          <ul className="list-disc list-inside ml-4 text-sm text-red-500">
-            {data.do_not.map((d, i) => (
-              <li key={i}>{d}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {data.seek_help_if && (
-        <div className="mb-2">
-          <span className="font-semibold text-sm text-orange-600">Seek help if:</span>
-          <ul className="list-disc list-inside ml-4 text-sm text-orange-500">
-            {data.seek_help_if.map((s, i) => (
-              <li key={i}>{s}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {data.recommendations && (
-        <div className="mb-2">
-          <span className="font-semibold text-sm text-green-600">Recommendations:</span>
-          <ul className="list-disc list-inside ml-4 text-sm text-green-500">
-            {data.recommendations.map((r, i) => (
-              <li key={i}>{r}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {typeof data.confidence === "number" && (
-        <div className="mt-2 text-xs text-gray-500">
-          <span>AI Confidence: {(data.confidence * 100).toFixed(0)}%</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
+export default App
