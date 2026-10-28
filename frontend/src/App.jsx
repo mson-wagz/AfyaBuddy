@@ -1064,9 +1064,6 @@ How can I assist you today? You can ask questions, upload images, or use voice c
   /* -------------------------- RENDER -------------------------- */
 
   return (
-    <div
-      className={`min-h-screen transition-all duration-500 ${
-        darkMode ? "bg-gradient-to-br from-gray-900 to-[#02595A] text-white" : "bg-gradient-to-br from-[#effaf7] to-white"
       }`}
     >
       {/* Header */}
