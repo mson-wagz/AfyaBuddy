@@ -1,0 +1,11 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.git/
+node_modules/
+modal_app.py
+
+# Never bake secrets into the image. Set these as environment variables instead.
+.env
+.env.*
