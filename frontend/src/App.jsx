@@ -846,76 +846,76 @@ How can I assist you today? You can ask questions, upload images, or use voice c
     }
   }
 
- const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (!input.trim() && !uploadedImage) return;
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!input.trim() && !uploadedImage) return;
 
-  const userMessage = {
-    id: Date.now().toString(),
-    type: "user",
-    content: input || "Image uploaded for AI analysis",
-    image: uploadedImage || undefined,
-    timestamp: new Date(),
-    isVoice: isListening,
-  };
+    const userMessage = {
+      id: Date.now().toString(),
+      type: "user",
+      content: input || "Image uploaded for AI analysis",
+      image: uploadedImage || undefined,
+      timestamp: new Date(),
+      isVoice: isListening,
+    };
 
-  setMessages((prev) => [...prev, userMessage]);
-  setIsLoading(true);
-  setInput("");
-  setUploadedImage(null);
+    setMessages((prev) => [...prev, userMessage]);
+    setIsLoading(true);
+    setInput("");
+    setUploadedImage(null);
 
-  try {
-    // Fetch first aid steps from the backend
-    const data = await getFirstAidStepsFromBackend(userMessage.content, selectedLanguage);
+    try {
+      // Fetch first aid steps from the backend
+      const data = await getFirstAidStepsFromBackend(userMessage.content, selectedLanguage);
 
-    if (data && data.steps?.length) {
-      // Add the detailed response to the messages
+      if (data && data.steps?.length) {
+        // Add the detailed response to the messages
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            type: "assistant",
+            content: data, // Pass the entire response object
+            timestamp: new Date(),
+            isAI: true,
+          },
+        ]);
+        setLastFirstAidQuery(userMessage.content);
+
+        // Read the first aid steps aloud
+        const stepsText = `Here are the first aid steps: ${data.steps.join(", ")}`;
+        speakText(stepsText);
+      } else {
+        // Fallback to general guidance if no steps are returned
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            type: "assistant",
+            content: "No specific steps found. Please try again.",
+            timestamp: new Date(),
+            isAI: true,
+            isError: true,
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error("Error fetching first aid steps:", error);
       setMessages((prev) => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
           type: "assistant",
-          content: data, // Pass the entire response object
-          timestamp: new Date(),
-          isAI: true,
-        },
-      ]);
-      setLastFirstAidQuery(userMessage.content);
-
-      // Read the first aid steps aloud
-      const stepsText = `Here are the first aid steps: ${data.steps.join(", ")}`;
-      speakText(stepsText);
-    } else {
-      // Fallback to general guidance if no steps are returned
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          type: "assistant",
-          content: "No specific steps found. Please try again.",
+          content: "Unable to fetch first aid steps. Please try again later.",
           timestamp: new Date(),
           isAI: true,
           isError: true,
         },
       ]);
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error) {
-    console.error("Error fetching first aid steps:", error);
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: (Date.now() + 1).toString(),
-        type: "assistant",
-        content: "Unable to fetch first aid steps. Please try again later.",
-        timestamp: new Date(),
-        isAI: true,
-        isError: true,
-      },
-    ]);
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   const startFacialAnalysis = async () => {
     try {
@@ -1064,6 +1064,9 @@ How can I assist you today? You can ask questions, upload images, or use voice c
   /* -------------------------- RENDER -------------------------- */
 
   return (
+    <div
+      className={`min-h-screen transition-all duration-500 ${
+        darkMode ? "bg-gradient-to-br from-gray-900 to-[#02595A] text-white" : "bg-gradient-to-br from-[#effaf7] to-white"
       }`}
     >
       {/* Header */}

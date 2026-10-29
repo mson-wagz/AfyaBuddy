@@ -2,7 +2,8 @@ import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from src.clinic_search import find_nearby_clinics
-from src.crew import Afyabuddy
+from src.crew import Afyabuddy, detect_condition_from_input
+from pydantic import BaseModel
 
 app = Flask(__name__)
 CORS(app)
@@ -12,6 +13,9 @@ ai = Afyabuddy()
 
 def get_json_body():
     return request.get_json(silent=True) or {}
+
+class SMSRequest(BaseModel):
+    message: str
 
 
 @app.route("/api/health", methods=["GET"])
@@ -134,6 +138,44 @@ def situation_analysis():
         app.logger.exception("Situation analysis failed")
         return jsonify({"error": "Unable to analyze the situation."}), 500
 
+@app.route("/ussd", methods=["POST"])
+def ussd_callback():
+    session_id = request.values.get("sessionId", "")
+    phone_number = request.values.get("phoneNumber", "")
+    text = request.values.get("text", "")
+
+    if text == "":
+        response = "CON Welcome to AfyaBuddy\n1. First Aid Chat\n2. Nearby Hospitals"
+    elif text == "1":
+        response = "CON Enter your emergency (e.g., burns, choking):"
+    elif text.startswith("1*"):
+        # Extract the condition from the input
+        condition = text.split("*")[1]
+        detected_condition = detect_condition_from_input(condition)
+
+        if detected_condition:
+            # Get first aid response from the agent
+            result = ai.run_first_aid(detected_condition)
+            response = f"END {result['result']}"
+        else:
+            response = "END Sorry, I couldn't understand the condition. Please try again."
+    elif text == "2":
+        response = "END Dial 999 or visit the nearest hospital."
+    else:
+        response = "END Invalid choice. Please try again."
+
+    return response, 200, {"Content-Type": "text/plain"}
+
+@app.post("/sms")
+async def handle_sms(request: SMSRequest):
+    message = request.message.lower()
+
+    # Use the Afyabuddy agent to process the message
+    try:
+        response = ai.run_first_aid(message)
+        return {"response": response["result"]}
+    except Exception as e:
+        return {"response": "Sorry, I couldn't process your request. Please try again later."}
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
