@@ -30,21 +30,18 @@ import {
   Bell,
   Moon,
   Sun,
-  Activity,
-  Thermometer,
   Eye,
   Brain,
   Stethoscope,
-  Timer,
   Share2,
   Star,
-  Plane,
   Snowflake,
-  Smartphone,
   Bot,
   Network,
   CheckCircle,
   XCircle,
+  Trash2,
+  UserPlus,
 } from "lucide-react"
 import logo from "./assets/afyabuddy-logo.png"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select"
@@ -76,6 +73,9 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:5000"
 
 // Kenya emergency numbers
 const EMERGENCY_NUMBER = "999"
+
+// Where the user's own emergency contacts are saved (on their device only)
+const CONTACTS_KEY = "afyabuddy_emergency_contacts"
 
 // --- getTranslation lives OUTSIDE the App component so it can be reused ---
 // eslint-disable-next-line react-refresh/only-export-components
@@ -217,6 +217,7 @@ async function getFirstAidStepsFromBackend(condition, targetLanguage = "en") {
   return normalizeFirstAid(await response.json())
 }
 
+// eslint-disable-next-line no-unused-vars
 async function getTranslationFromBackend(text, targetLanguage) {
   const response = await fetch(`${BACKEND_URL}/api/translate`, {
     method: "POST",
@@ -429,7 +430,7 @@ const App = () => {
     facial: "ready",
   })
 
-  // Vital signs (simulated demo data)
+  // Vital signs (simulated demo data, still passed to the face analysis)
   const [vitalSigns, setVitalSigns] = useState({
     heartRate: 72,
     temperature: 36.5,
@@ -472,10 +473,53 @@ const App = () => {
     },
   ])
 
-  const [emergencyContacts] = useState([
-    { name: "Dr. Sarah Mwangi", phone: "+254-700-123456", relation: "Family Doctor" },
-    { name: "John Kamau", phone: "+254-722-987654", relation: "Emergency Contact" },
-  ])
+  // Emergency contacts: added by the user, saved on this device only
+  const [emergencyContacts, setEmergencyContacts] = useState(() => {
+    try {
+      const saved = localStorage.getItem(CONTACTS_KEY)
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
+  const [newContact, setNewContact] = useState({ name: "", phone: "", relation: "" })
+  const [contactError, setContactError] = useState("")
+
+  // Save contacts whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(CONTACTS_KEY, JSON.stringify(emergencyContacts))
+    } catch {
+      // storage unavailable: contacts just won't persist
+    }
+  }, [emergencyContacts])
+
+  const addContact = (e) => {
+    e.preventDefault()
+    const name = newContact.name.trim()
+    const phone = newContact.phone.trim()
+    const relation = newContact.relation.trim()
+
+    if (!name) {
+      setContactError("Enter the contact's name.")
+      return
+    }
+    if (phone.replace(/\D/g, "").length < 7) {
+      setContactError("Enter a valid phone number.")
+      return
+    }
+
+    setEmergencyContacts((prev) => [
+      ...prev,
+      { id: Date.now().toString(), name, phone, relation: relation || "Emergency contact" },
+    ])
+    setNewContact({ name: "", phone: "", relation: "" })
+    setContactError("")
+  }
+
+  const removeContact = (id) => {
+    setEmergencyContacts((prev) => prev.filter((c) => c.id !== id))
+  }
 
   const [isEmergencyMode, setIsEmergencyMode] = useState(false)
   const [sosCountdown, setSosCountdown] = useState(0)
@@ -483,7 +527,7 @@ const App = () => {
   // AI-powered features
   const [, setCameraStream] = useState(null) // we only need the setter
   const [isAnalyzingFace, setIsAnalyzingFace] = useState(false)
-  const [aiHealthAnalysis, setAiHealthAnalysis] = useState(null)
+  const [, setAiHealthAnalysis] = useState(null)
   const [stressLevel, setStressLevel] = useState(0)
   const [painLevel, setPainLevel] = useState(0)
   const [mentalHealthScore, setMentalHealthScore] = useState(85)
@@ -662,6 +706,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
   }, [])
 
   // SOS action. useCallback keeps it stable so the countdown effect doesn't re-fire.
+  // NOTE: this only logs to the console for now. It does not send real alerts yet.
   const triggerEmergencySOS = useCallback(() => {
     setEmergencyPulse(true)
     setIsEmergencyMode(false) // stop the countdown right away so this only fires once
@@ -976,6 +1021,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
     }
   }
 
+  // eslint-disable-next-line no-unused-vars
   const enableGestureControl = () => {
     setGestureControl(!gestureControl)
     if (!gestureControl) {
@@ -986,6 +1032,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
     }
   }
 
+  // eslint-disable-next-line no-unused-vars
   const authenticateBiometric = async () => {
     if ("credentials" in navigator) {
       try {
@@ -1000,6 +1047,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
     }
   }
 
+  // eslint-disable-next-line no-unused-vars
   const requestDroneResponse = () => {
     setDroneResponse(true)
     setAiCoachMessages((prev) => [
@@ -1012,6 +1060,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
     }, 5000)
   }
 
+  // eslint-disable-next-line no-unused-vars
   const analyzeEnvironment = () => {
     const alerts = [
       "🌡️ High temperature (32°C) - Risk of heat exhaustion (demo)",
@@ -1180,14 +1229,10 @@ How can I assist you today? You can ask questions, upload images, or use voice c
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className={`grid w-full grid-cols-6 ${darkMode ? "bg-gray-800" : "bg-white"}`}>
+          <TabsList className={`grid w-full grid-cols-5 ${darkMode ? "bg-gray-800" : "bg-white"}`}>
             <TabsTrigger value="chat" className={TAB_CLASS}>
               <Bot className="w-4 h-4" />
               <span className="hidden sm:inline">AI Chat</span>
-            </TabsTrigger>
-            <TabsTrigger value="vitals" className={TAB_CLASS}>
-              <Activity className="w-4 h-4" />
-              <span className="hidden sm:inline">AI Vitals</span>
             </TabsTrigger>
             <TabsTrigger value="clinics" className={TAB_CLASS}>
               <MapPin className="w-4 h-4" />
@@ -1445,187 +1490,6 @@ How can I assist you today? You can ask questions, upload images, or use voice c
             </Card>
           </TabsContent>
 
-          {/* ---------------- VITALS TAB ---------------- */}
-          <TabsContent value="vitals" className="space-y-6">
-            <DemoNotice darkMode={darkMode}>
-              <strong>Demo data:</strong> these numbers are simulated and are not real measurements. Do not use them to
-              make health decisions.
-            </DemoNotice>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card className={cardCls}>
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-[#FD7963] p-3 rounded-full relative">
-                      <Activity className="w-6 h-6 text-white" />
-                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#68DEC4] rounded-full animate-pulse"></div>
-                    </div>
-                    <div>
-                      <p className={`text-sm ${mutedText}`}>Heart Rate (demo)</p>
-                      <p className="text-2xl font-bold">{vitalSigns.heartRate} BPM</p>
-                    </div>
-                  </div>
-                  <Progress value={(vitalSigns.heartRate / 120) * 100} className="mt-3" />
-                  <p className="text-xs text-[#0a7a77] mt-1">Normal range</p>
-                </CardContent>
-              </Card>
-
-              <Card className={cardCls}>
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-[#02595A] p-3 rounded-full relative">
-                      <Thermometer className="w-6 h-6 text-white" />
-                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#68DEC4] rounded-full"></div>
-                    </div>
-                    <div>
-                      <p className={`text-sm ${mutedText}`}>Temperature (demo)</p>
-                      <p className="text-2xl font-bold">{vitalSigns.temperature}°C</p>
-                    </div>
-                  </div>
-                  <Progress value={((vitalSigns.temperature - 35) / 5) * 100} className="mt-3" />
-                  <p className="text-xs text-[#0a7a77] mt-1">Optimal</p>
-                </CardContent>
-              </Card>
-
-              <Card className={cardCls}>
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-[#0a7a77] p-3 rounded-full relative">
-                      <Activity className="w-6 h-6 text-white" />
-                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#68DEC4] rounded-full"></div>
-                    </div>
-                    <div>
-                      <p className={`text-sm ${mutedText}`}>Oxygen Level (demo)</p>
-                      <p className="text-2xl font-bold">{vitalSigns.oxygenLevel}%</p>
-                    </div>
-                  </div>
-                  <Progress value={vitalSigns.oxygenLevel} className="mt-3" />
-                  <p className="text-xs text-[#0a7a77] mt-1">Excellent</p>
-                </CardContent>
-              </Card>
-
-              <Card className={cardCls}>
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-[#3bb9a0] p-3 rounded-full relative">
-                      <Stethoscope className="w-6 h-6 text-white" />
-                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#68DEC4] rounded-full"></div>
-                    </div>
-                    <div>
-                      <p className={`text-sm ${mutedText}`}>Blood Pressure (demo)</p>
-                      <p className="text-2xl font-bold">{vitalSigns.bloodPressure}</p>
-                    </div>
-                  </div>
-                  <div className="mt-3 text-sm text-[#0a7a77]">Normal range</div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* AI Health Analysis Results */}
-            {aiHealthAnalysis && (
-              <Card className={cardCls}>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Brain className="w-5 h-5 text-[#02595A]" />
-                    AI Health Analysis Results
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-4 rounded-lg bg-gradient-to-r from-[#FD7963]/10 to-orange-500/10">
-                      <h4 className="font-semibold mb-2">AI Stress Analysis</h4>
-                      <Progress value={aiHealthAnalysis.stressLevel} className="mb-2" />
-                      <p className="text-sm">
-                        {aiHealthAnalysis.stressLevel}% - AI Assessment:{" "}
-                        {aiHealthAnalysis.stressLevel > 70
-                          ? "High"
-                          : aiHealthAnalysis.stressLevel > 40
-                            ? "Moderate"
-                            : "Low"}
-                      </p>
-                    </div>
-
-                    <div className="p-4 rounded-lg bg-gradient-to-r from-yellow-500/10 to-[#FD7963]/10">
-                      <h4 className="font-semibold mb-2">AI Pain Detection</h4>
-                      <Progress value={aiHealthAnalysis.painLevel} className="mb-2" />
-                      <p className="text-sm">
-                        {aiHealthAnalysis.painLevel}% - AI Assessment:{" "}
-                        {aiHealthAnalysis.painLevel > 70
-                          ? "Severe"
-                          : aiHealthAnalysis.painLevel > 40
-                            ? "Moderate"
-                            : "Minimal"}
-                      </p>
-                    </div>
-
-                    <div className="p-4 rounded-lg bg-gradient-to-r from-[#68DEC4]/20 to-[#02595A]/10">
-                      <h4 className="font-semibold mb-2">AI Wellness Score</h4>
-                      <Progress value={aiHealthAnalysis.overallWellness} className="mb-2" />
-                      <p className="text-sm">
-                        {aiHealthAnalysis.overallWellness}/100 - AI Assessment:{" "}
-                        {aiHealthAnalysis.overallWellness > 80
-                          ? "Excellent"
-                          : aiHealthAnalysis.overallWellness > 60
-                            ? "Good"
-                            : "Needs Attention"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {aiHealthAnalysis.keyFindings && (
-                    <div className="mt-4">
-                      <h4 className="font-semibold mb-2">AI Key Findings:</h4>
-                      <ul className="list-disc list-inside space-y-1">
-                        {aiHealthAnalysis.keyFindings.map((finding, index) => (
-                          <li key={index} className="text-sm">
-                            {finding}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            <Card className={cardCls}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Bot className="w-5 h-5 text-[#02595A]" />
-                  AI Health Insights
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <Alert className={darkMode ? "bg-[#02595A]/20 border-[#0a7a77]" : "bg-[#effaf7] border-[#68DEC4]"}>
-                    <Bot className="h-4 w-4 text-[#02595A]" />
-                    <AlertDescription className={darkMode ? "text-[#68DEC4]" : "text-[#02595A]"}>
-                      Sample insight (demo): these cards show how results will look once real sensors are connected.
-                    </AlertDescription>
-                  </Alert>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="text-center p-4 rounded-lg bg-gradient-to-r from-[#02595A]/10 to-[#68DEC4]/10">
-                      <Timer className="w-8 h-8 mx-auto mb-2 text-[#02595A]" />
-                      <p className="font-semibold">Last Scan</p>
-                      <p className="text-sm text-gray-500">2 minutes ago</p>
-                    </div>
-                    <div className="text-center p-4 rounded-lg bg-gradient-to-r from-[#68DEC4]/10 to-[#02595A]/10">
-                      <Shield className="w-8 h-8 mx-auto mb-2 text-[#0a7a77]" />
-                      <p className="font-semibold">Health Score</p>
-                      <p className="text-sm text-gray-500">Excellent (95/100)</p>
-                    </div>
-                    <div className="text-center p-4 rounded-lg bg-gradient-to-r from-[#FD7963]/10 to-[#68DEC4]/10">
-                      <Bell className="w-8 h-8 mx-auto mb-2 text-[#FD7963]" />
-                      <p className="font-semibold">Alerts</p>
-                      <p className="text-sm text-gray-500">None active</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
           {/* ---------------- CLINICS TAB ---------------- */}
           <TabsContent value="clinics" className="space-y-6">
             {showClinics && nearbyClinics.length > 0 ? (
@@ -1815,28 +1679,81 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                   {t.emergencyContacts}
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {emergencyContacts.map((contact, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-4 rounded-lg bg-gradient-to-r from-red-500/10 to-pink-500/10"
-                    >
-                      <div>
-                        <h3 className="font-semibold">{contact.name}</h3>
-                        <p className={`text-sm ${mutedText}`}>{contact.relation}</p>
-                      </div>
-                      <Button
-                        size="sm"
-                        onClick={() => window.open(`tel:${contact.phone}`, "_self")}
-                        className="flex items-center gap-2 px-4 py-2 rounded-md font-semibold bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-md hover:from-red-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-red-400 transition-all duration-200"
+              <CardContent className="space-y-6">
+                {emergencyContacts.length === 0 ? (
+                  <p className={`text-sm ${mutedText}`}>
+                    No contacts yet. Add a family member or friend below to call them in one tap.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {emergencyContacts.map((contact) => (
+                      <div
+                        key={contact.id}
+                        className="flex items-center justify-between gap-3 p-4 rounded-lg bg-gradient-to-r from-red-500/10 to-pink-500/10"
                       >
-                        <Phone className="w-4 h-4 mr-1" />
-                        Call
-                      </Button>
-                    </div>
-                  ))}
-                </div>
+                        <div className="min-w-0">
+                          <h3 className="font-semibold truncate">{contact.name}</h3>
+                          <p className={`text-sm ${mutedText}`}>{contact.relation}</p>
+                          <p className={`text-sm ${mutedText}`}>{contact.phone}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Button
+                            size="sm"
+                            onClick={() => window.open(`tel:${contact.phone.replace(/[^\d+]/g, "")}`, "_self")}
+                            className="flex items-center gap-1 font-semibold bg-gradient-to-r from-red-500 to-pink-500 text-white hover:from-red-600 hover:to-pink-600"
+                          >
+                            <Phone className="w-4 h-4" />
+                            Call
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => removeContact(contact.id)}
+                            aria-label={`Remove ${contact.name}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <Separator />
+
+                <form onSubmit={addContact} className="space-y-3">
+                  <h4 className="font-semibold flex items-center gap-2">
+                    <UserPlus className="w-4 h-4" />
+                    Add a contact
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <Input
+                      placeholder="Full name"
+                      value={newContact.name}
+                      onChange={(e) => setNewContact((p) => ({ ...p, name: e.target.value }))}
+                    />
+                    <Input
+                      type="tel"
+                      placeholder="Phone, e.g. +254 712 345678"
+                      value={newContact.phone}
+                      onChange={(e) => setNewContact((p) => ({ ...p, phone: e.target.value }))}
+                    />
+                    <Input
+                      placeholder="Relationship, e.g. Mother"
+                      value={newContact.relation}
+                      onChange={(e) => setNewContact((p) => ({ ...p, relation: e.target.value }))}
+                    />
+                  </div>
+                  {contactError && <p className="text-sm text-red-600">{contactError}</p>}
+                  <Button
+                    type="submit"
+                    className={`flex items-center gap-2 ${BRAND_GRADIENT} ${BRAND_GRADIENT_HOVER} text-white`}
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    Save contact
+                  </Button>
+                  <p className={`text-xs ${mutedText}`}>Contacts are saved on this device only.</p>
+                </form>
               </CardContent>
             </Card>
 
@@ -1943,38 +1860,6 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                     </div>
                   </div>
                 </div>
-
-                {/* BELOW: gesture + biometric, directly under the stretched scan button */}
-                <div className="mt-6 space-y-4 md:w-[calc(50%-0.75rem)]">
-                  <Button
-                    onClick={enableGestureControl}
-                    variant={gestureControl ? "default" : "outline"}
-                    className="w-full"
-                  >
-                    {gestureControl ? "Disable Gesture Control" : "Enable Gesture Control"}
-                  </Button>
-
-                  <Button
-                    onClick={authenticateBiometric}
-                    variant={biometricAuth ? "default" : "outline"}
-                    className="w-full"
-                  >
-                    {biometricAuth ? "Authenticated" : "Authenticate with Biometric"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className={`${cardCls} ${droneResponse ? "ring-2 ring-red-500 animate-bounce" : ""}`}>
-              <CardContent className="p-6 text-center">
-                <div className="bg-red-500 p-3 rounded-full w-fit mx-auto mb-3 relative">
-                  <Plane className="w-6 h-6 text-white" />
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#68DEC4] rounded-full"></div>
-                </div>
-                <h3 className="font-semibold mb-2">Drone Response (demo)</h3>
-                <Button size="sm" onClick={requestDroneResponse} variant="destructive" disabled={droneResponse}>
-                  {droneResponse ? "Requested" : "Request Drone"}
-                </Button>
               </CardContent>
             </Card>
 
@@ -2016,89 +1901,10 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                 </div>
                 <Button
                   onClick={startAIHealthCoach}
-                  className={`w-full mt-4 ${BRAND_GRADIENT} ${BRAND_GRADIENT_HOVER} text-white`}
+                  className={`w-full mt-6 flex items-center justify-center gap-2 px-8 py-6 text-base font-semibold ${BRAND_GRADIENT} ${BRAND_GRADIENT_HOVER} text-white`}
                 >
-                  <Brain className="w-4 h-4 mr-2" />
+                  <Brain className="w-5 h-5" />
                   Activate AI Health Coach
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Community network */}
-            <Card className={cardCls}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5 text-[#02595A]" />
-                  Community Emergency Network (demo)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {communityHelpers.map((helper, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-4 rounded-lg bg-gradient-to-r from-[#68DEC4]/15 to-[#02595A]/10"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-3 h-3 rounded-full ${helper.available ? "bg-[#68DEC4]" : "bg-[#FD7963]"}`}
-                        ></div>
-                        <div>
-                          <h4 className="font-semibold flex items-center gap-2">
-                            <Bot className="w-4 h-4" />
-                            {helper.name}
-                          </h4>
-                          <p className={`text-sm ${mutedText}`}>
-                            {helper.specialty} • {helper.distance}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        disabled={!helper.available}
-                        variant={helper.available ? "default" : "secondary"}
-                      >
-                        {helper.available ? "Connect" : "Busy"}
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Smart devices */}
-            <Card className={cardCls}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Smartphone className="w-5 h-5 text-[#02595A]" />
-                  Smart Device Integration (demo)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {smartDevices.map((device, index) => (
-                    <div
-                      key={index}
-                      className={`mb-4 p-2 rounded ${darkMode ? "bg-gray-900" : "bg-gray-50"}`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold flex items-center gap-2">
-                          <Bot className="w-4 h-4" />
-                          {device.name}
-                        </h4>
-                        <div
-                          className={`w-3 h-3 rounded-full ${device.connected ? "bg-[#68DEC4]" : "bg-[#FD7963]"}`}
-                        ></div>
-                      </div>
-                      <p className={`text-sm mb-1 ${mutedText}`}>Battery: {device.battery}%</p>
-                      <p className="text-xs text-gray-500">Last sync: {device.lastSync}</p>
-                      <Progress value={device.battery} className="mt-2" />
-                    </div>
-                  ))}
-                </div>
-                <Button onClick={analyzeEnvironment} className="w-full mt-4" variant="outline">
-                  <Thermometer className="w-4 h-4 mr-2" />
-                  Analyze Environment
                 </Button>
               </CardContent>
             </Card>
