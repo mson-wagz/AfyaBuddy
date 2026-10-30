@@ -69,7 +69,7 @@ const TAB_CLASS =
   "flex items-center justify-center gap-2 data-[state=active]:bg-[#02595A] data-[state=active]:text-white"
 
 // Where your backend lives. Set VITE_BACKEND_URL in a .env file to change it.
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:5000"
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://abigailwagura1--afya-buddy-backend-web.us-east.modal.run"
 
 // Kenya emergency numbers
 const EMERGENCY_NUMBER = "999"
@@ -534,25 +534,11 @@ const App = () => {
   const [environmentalAlerts, setEnvironmentalAlerts] = useState([])
   const [aiCoachMessages, setAiCoachMessages] = useState([])
   const [gestureControl, setGestureControl] = useState(false)
-  const [biometricAuth, setBiometricAuth] = useState(false)
-  const [droneResponse, setDroneResponse] = useState(false)
-
-  const [communityHelpers] = useState([
-    { name: "Dr. Jane Wanjiku", distance: "0.5km", specialty: "Emergency Medicine", available: true },
-    { name: "Nurse Peter Ochieng", distance: "1.2km", specialty: "First Aid Trainer", available: true },
-    { name: "Paramedic Sarah Muthoni", distance: "2.1km", specialty: "Trauma Care", available: false },
-  ])
 
   const [healthPredictions] = useState([
     { condition: "Dehydration Risk", probability: 15, timeframe: "Next 2 hours", prevention: "Drink 500ml water" },
     { condition: "Stress Overload", probability: 35, timeframe: "Today", prevention: "Take 10min meditation break" },
     { condition: "Sleep Deprivation", probability: 60, timeframe: "Tonight", prevention: "Sleep by 10 PM" },
-  ])
-
-  const [smartDevices] = useState([
-    { name: "Smart Watch", connected: true, battery: 85, lastSync: "2 min ago" },
-    { name: "Smart Scale", connected: true, battery: 92, lastSync: "1 hour ago" },
-    { name: "Air Quality Monitor", connected: false, battery: 0, lastSync: "Never" },
   ])
 
   const languages = [
