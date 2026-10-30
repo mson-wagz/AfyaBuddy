@@ -55,9 +55,10 @@ import {
 /* ------------------------------------------------------------------ */
 /*  BRAND                                                              */
 /*  Teal  #02595A  (main)   Mint  #68DEC4  (accent)   Coral #FD7963    */
+/*  Ink   #03302F  (dark pill buttons)   Page  #F1FAF7                 */
 /* ------------------------------------------------------------------ */
-const BRAND_GRADIENT = "bg-gradient-to-r from-[#02595A] to-[#68DEC4]"
-const BRAND_GRADIENT_HOVER = "hover:from-[#014647] hover:to-[#4fcfb2]"
+const BRAND_GRADIENT = "bg-[#02595A]"
+const BRAND_GRADIENT_HOVER = "hover:bg-[#014647]"
 
 // Toggle switches: visible border in both themes, teal when ON, grey when OFF
 const switchClass = (darkMode) =>
@@ -66,7 +67,18 @@ const switchClass = (darkMode) =>
   } data-[state=checked]:bg-[#0a7a77] data-[state=unchecked]:bg-gray-300`
 
 const TAB_CLASS =
-  "flex items-center justify-center gap-2 data-[state=active]:bg-[#02595A] data-[state=active]:text-white"
+  "flex items-center justify-center gap-2 rounded-full py-2.5 font-semibold data-[state=active]:bg-[#03302F] data-[state=active]:text-white data-[state=active]:shadow-md"
+
+// Floating white pill, like "999 / 112 SOS" on the landing page
+const FloatPill = ({ children, className = "", darkMode }) => (
+  <span
+    className={`absolute z-10 rounded-full px-4 py-2 text-xs font-bold shadow-lg ${
+      darkMode ? "bg-gray-800" : "bg-white"
+    } ${className}`}
+  >
+    {children}
+  </span>
+)
 
 // Where your backend lives. Set VITE_BACKEND_URL in a .env file to change it.
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://abigailwagura1--afya-buddy-backend-web.us-east.modal.run"
@@ -353,8 +365,8 @@ function FirstAidInstructions({ data, darkMode }) {
 
       {data.do_not?.length > 0 && (
         <div className="mb-2">
-          <span className="font-semibold text-sm text-red-600">Do NOT:</span>
-          <ul className="list-disc list-inside ml-4 text-sm text-red-500">
+          <span className="font-semibold text-sm text-[#E0543D]">Do NOT:</span>
+          <ul className="list-disc list-inside ml-4 text-sm text-[#E0543D]">
             {data.do_not.map((d, i) => (
               <li key={i}>{d}</li>
             ))}
@@ -364,8 +376,8 @@ function FirstAidInstructions({ data, darkMode }) {
 
       {data.seek_help_if?.length > 0 && (
         <div className="mb-2">
-          <span className="font-semibold text-sm text-orange-600">Seek help if:</span>
-          <ul className="list-disc list-inside ml-4 text-sm text-orange-500">
+          <span className="font-semibold text-sm text-[#E0543D]">Seek help if:</span>
+          <ul className="list-disc list-inside ml-4 text-sm text-[#E0543D]">
             {data.seek_help_if.map((s, i) => (
               <li key={i}>{s}</li>
             ))}
@@ -408,7 +420,7 @@ function FirstAidInstructions({ data, darkMode }) {
     </div>
   );
 }
-const App = () => {
+const App = ({ onBack }) => {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -620,9 +632,10 @@ const App = () => {
   const t = translations[selectedLanguage] || translations.en
 
   // Shared card style (light / dark)
-  const cardCls = darkMode ? "bg-gray-800 border-gray-700" : "bg-white"
-  const mutedText = darkMode ? "text-gray-400" : "text-gray-600"
-
+  const cardCls = darkMode
+    ? "bg-gray-800 border-gray-700 rounded-[28px]"
+    : "bg-white border-[#E4F1EC] rounded-[28px] shadow-[0_20px_50px_-20px_rgba(2,89,90,0.25)]"
+  const mutedText = darkMode ? "text-gray-400" : "text-[#4C6A64]"
   /* -------------------------- EFFECTS -------------------------- */
 
   // Re-fetch the last first-aid answer when the language changes
@@ -669,7 +682,7 @@ const App = () => {
 
 🩺 **OpenAI Medical Consultation** - Expert first aid guidance powered by GPT
 🌍 **Google Maps Location Services** - Smart clinic recommendations  
-🗣️ **Google Translate Support** - Real-time translation in 13+ Kenyan languages
+🗣️ **Google Translate Support** - Real-time translation in English & Kiswahili
 👁️ **TensorFlow Facial Analysis** - AI-powered stress and wellness assessment
 
 How can I assist you today? You can ask questions, upload images, or use voice commands!`,
@@ -1100,122 +1113,137 @@ How can I assist you today? You can ask questions, upload images, or use voice c
 
   return (
     <div
-      className={`min-h-screen transition-all duration-500 ${
-        darkMode ? "bg-gradient-to-br from-gray-900 to-[#02595A] text-white" : "bg-gradient-to-br from-[#effaf7] to-white"
+      className={`min-h-screen transition-colors duration-500 ${
+        darkMode ? "bg-gradient-to-br from-gray-900 to-[#02595A] text-white" : "bg-[#F1FAF7] text-[#02595A]"
       }`}
     >
-      {/* Header */}
-      <div
-        className={`shadow-lg border-b backdrop-blur-md ${darkMode ? "bg-gray-800/90 border-gray-700" : "bg-white/90 border-gray-200"}`}
-      >
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            {/* Logo + status */}
-            <div className="flex items-center gap-3">
-              <div
-                className={`${darkMode ? "bg-white rounded-xl px-2 py-1" : ""} ${emergencyPulse ? "animate-bounce" : ""} ${pulseAnimation ? "animate-pulse" : ""}`}
-              >
-                <img
-                  src={logo}
-                  alt="AfyaBuddy"
-                  className="h-12 w-auto"
-                  onError={(e) => {
-                    e.currentTarget.style.display = "none"
-                    e.currentTarget.nextElementSibling.style.display = "block"
-                  }}
-                />
-                <span style={{ display: "none" }} className="text-2xl font-bold text-[#02595A]">
-                  AfyaBuddy
-                </span>
-              </div>
-              <div>
-                <p className={`text-sm ${darkMode ? "text-gray-300" : "text-[#02595A]"}`}>{t.subtitle}</p>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                  <AIStatusIndicator status={aiStatus.location} label="Google Maps" />
-                  <AIStatusIndicator status={aiStatus.translation} label="Translate" />
-                  <AIStatusIndicator status={aiStatus.facial} label="TensorFlow" />
-                </div>
-              </div>
+      {/* Header: same layout as the landing nav */}
+      <header className={`${darkMode ? "bg-gray-900/80" : "bg-[#F1FAF7]/90"} backdrop-blur-md sticky top-0 z-20`}>
+        <div className="max-w-6xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div
+              className={`${darkMode ? "bg-white rounded-xl px-2 py-1" : ""} ${emergencyPulse ? "animate-bounce" : ""} ${pulseAnimation ? "animate-pulse" : ""}`}
+            >
+              <img
+                src={logo}
+                alt="AfyaBuddy"
+                className="h-11 w-auto"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none"
+                  e.currentTarget.nextElementSibling.style.display = "block"
+                }}
+              />
+              <span style={{ display: "none" }} className="text-2xl font-bold text-[#02595A]">
+                AfyaBuddy
+              </span>
             </div>
-
-            {/* Controls */}
-            <div className="flex flex-wrap items-center gap-4">
-              {/* Voice toggle */}
-              <div className="flex items-center gap-2">
-                {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-                <Switch
-                  checked={voiceEnabled}
-                  onCheckedChange={setVoiceEnabled}
-                  className={switchClass(darkMode)}
-                />
-              </div>
-
-              {/* Dark mode toggle */}
-              <div className="flex items-center gap-2">
-                {darkMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-                <Switch
-                  checked={darkMode}
-                  onCheckedChange={setDarkMode}
-                  className={switchClass(darkMode)}
-                />
-              </div>
-
-              {/* Language selector */}
-              <div className="flex items-center gap-2 bg-white rounded-md pl-2 text-gray-900">
-                <Globe className="w-4 h-4" />
-                <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
-                  <SelectTrigger className="w-[180px] bg-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white">
-                    {languages.map((lang) => (
-                      <SelectItem key={lang.code} value={lang.code}>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{lang.nativeName}</span>
-                          <span className="text-xs text-gray-500">{lang.name} (AI Powered)</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Emergency SOS button (stays red on purpose) */}
-              <Button
-                variant={isEmergencyMode ? "destructive" : "outline"}
-                size="sm"
-                onClick={isEmergencyMode ? cancelSOS : startSOSCountdown}
-                className={`${isEmergencyMode ? "animate-pulse" : "border-red-500 text-red-600"} font-bold`}
-              >
-                {isEmergencyMode ? (
-                  <>
-                    <Shield className="w-4 h-4 mr-1" />
-                    Cancel SOS ({sosCountdown})
-                  </>
-                ) : (
-                  <>
-                    <Zap className="w-4 h-4 mr-1" />
-                    SOS
-                  </>
-                )}
-              </Button>
+            <div className="hidden md:flex flex-wrap gap-x-4 gap-y-1">
+              <AIStatusIndicator status={aiStatus.location} label="Maps" />
+              <AIStatusIndicator status={aiStatus.translation} label="Translate" />
+              <AIStatusIndicator status={aiStatus.facial} label="TensorFlow" />
             </div>
           </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Voice toggle */}
+            <div className="flex items-center gap-2">
+              {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+              <Switch checked={voiceEnabled} onCheckedChange={setVoiceEnabled} className={switchClass(darkMode)} />
+            </div>
+
+            {/* Dark mode toggle */}
+            <div className="flex items-center gap-2">
+              {darkMode ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+              <Switch checked={darkMode} onCheckedChange={setDarkMode} className={switchClass(darkMode)} />
+            </div>
+
+            {/* Language selector */}
+            <div className="flex items-center gap-2 bg-white rounded-full pl-3 text-gray-900 shadow-sm">
+              <Globe className="w-4 h-4" />
+              <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
+                <SelectTrigger className="w-[150px] border-0 bg-transparent rounded-full focus:ring-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-white">
+                  {languages.map((lang) => (
+                    <SelectItem key={lang.code} value={lang.code}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{lang.nativeName}</span>
+                        <span className="text-xs text-gray-500">{lang.name} (AI Powered)</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {onBack && (
+              <Button
+                size="sm"
+                onClick={onBack}
+                className="rounded-full px-5 font-semibold bg-[#03302F] hover:bg-[#02595A] text-white"
+              >
+                Home
+              </Button>
+            )}
+
+            {/* Emergency SOS button */}
+            <Button
+              size="sm"
+              onClick={isEmergencyMode ? cancelSOS : startSOSCountdown}
+              className={`flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-5 font-bold text-white bg-[#FD7963] hover:bg-[#f2644d] ${isEmergencyMode ? "animate-pulse" : ""}`}
+            >
+              {isEmergencyMode ? (
+                <>
+                  <Shield className="w-4 h-4" />
+                  Cancel SOS ({sosCountdown})
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4" />
+                  SOS
+                </>
+              )}
+            </Button>
+          </div>
         </div>
-      </div>
+      </header>
 
       <div className="max-w-6xl mx-auto px-4 py-6">
-        {/* Emergency disclaimer (stays red on purpose) */}
-        <Alert className={`mb-6 border-red-200 ${darkMode ? "bg-red-900/20" : "bg-red-50"}`}>
-          <Bot className="h-4 w-4 text-red-600" />
-          <AlertDescription className={darkMode ? "text-red-300" : "text-red-800"}>
+        {/* Hero: same voice as the landing page */}
+        <section className="mb-8">
+          <span
+            className={`inline-block rounded-full border px-4 py-1.5 text-xs font-bold ${
+              darkMode ? "bg-[#02595A]/40 border-[#0a7a77] text-[#68DEC4]" : "bg-[#DDF5EE] border-[#BFE9DD] text-[#02595A]"
+            }`}
+          >
+            First aid guidance, powered by AI
+          </span>
+          <h1
+            className={`mt-4 text-4xl md:text-6xl font-extrabold leading-[1.05] tracking-tight ${darkMode ? "text-white" : "text-[#02595A]"}`}
+          >
+            Help for the moment that matters<span className="text-[#FD7963]">.</span>
+          </h1>
+          <p className={`mt-3 max-w-xl text-base ${mutedText}`}>{t.subtitle}</p>
+        </section>
+
+        {/* Emergency disclaimer */}
+        <div
+          className={`mb-6 flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
+            darkMode ? "bg-[#FD7963]/10 border-[#FD7963]/40 text-[#ffb3a5]" : "bg-white border-[#FD7963]/40 text-[#7a2e1f]"
+          }`}
+        >
+          <Phone className="w-4 h-4 mt-0.5 shrink-0 text-[#FD7963]" />
+          <p>
             <strong>{t.emergencyDisclaimer}</strong> {t.emergencyText}
-          </AlertDescription>
-        </Alert>
+          </p>
+        </div>
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className={`grid w-full grid-cols-5 ${darkMode ? "bg-gray-800" : "bg-white"}`}>
+          <TabsList
+            className={`grid w-full grid-cols-5 h-auto rounded-full p-1.5 shadow-sm ${darkMode ? "bg-gray-800" : "bg-white"}`}
+          >
             <TabsTrigger value="chat" className={TAB_CLASS}>
               <Bot className="w-4 h-4" />
               <span className="hidden sm:inline">AI Chat</span>
@@ -1243,24 +1271,22 @@ How can I assist you today? You can ask questions, upload images, or use voice c
             {/* Quick actions */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <Card
-                className={`cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-105 ${cardCls}`}
+                className={`cursor-pointer transition-transform duration-200 hover:-translate-y-1 ${cardCls}`}
                 onClick={() => window.open(`tel:${EMERGENCY_NUMBER}`, "_self")}
               >
                 <CardContent className="p-4 text-center">
-                  <div className="bg-red-500 p-3 rounded-full w-fit mx-auto mb-3 relative">
+                  <div className="bg-[#FD7963] p-3 rounded-full w-fit mx-auto mb-3">
                     <Phone className="w-6 h-6 text-white" />
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#68DEC4] rounded-full"></div>
                   </div>
                   <h3 className="font-semibold text-sm">{t.emergencyCall}</h3>
                   <p className={`text-xs ${mutedText}`}>{t.emergencyCallDesc}</p>
                 </CardContent>
               </Card>
 
-              <Card className={`cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-105 ${cardCls}`}>
+              <Card className={`cursor-pointer transition-transform duration-200 hover:-translate-y-1 ${cardCls}`}>
                 <CardContent className="p-4 text-center">
-                  <div className="bg-[#02595A] p-3 rounded-full w-fit mx-auto mb-3 relative">
+                  <div className="bg-[#02595A] p-3 rounded-full w-fit mx-auto mb-3">
                     <Brain className="w-6 h-6 text-white" />
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#68DEC4] rounded-full animate-pulse"></div>
                   </div>
                   <h3 className="font-semibold text-sm">OpenAI Diagnosis</h3>
                   <p className={`text-xs ${mutedText}`}>GPT-powered medical analysis</p>
@@ -1268,24 +1294,22 @@ How can I assist you today? You can ask questions, upload images, or use voice c
               </Card>
 
               <Card
-                className={`cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-105 ${cardCls}`}
+                className={`cursor-pointer transition-transform duration-200 hover:-translate-y-1 ${cardCls}`}
                 onClick={() => fileInputRef.current?.click()}
               >
                 <CardContent className="p-4 text-center">
-                  <div className="bg-[#0a7a77] p-3 rounded-full w-fit mx-auto mb-3 relative">
+                  <div className="bg-[#0a7a77] p-3 rounded-full w-fit mx-auto mb-3">
                     <Eye className="w-6 h-6 text-white" />
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#68DEC4] rounded-full"></div>
                   </div>
                   <h3 className="font-semibold text-sm">TensorFlow Vision</h3>
                   <p className={`text-xs ${mutedText}`}>Advanced image analysis</p>
                 </CardContent>
               </Card>
 
-              <Card className={`cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-105 ${cardCls}`}>
+              <Card className={`cursor-pointer transition-transform duration-200 hover:-translate-y-1 ${cardCls}`}>
                 <CardContent className="p-4 text-center">
-                  <div className="bg-[#FD7963] p-3 rounded-full w-fit mx-auto mb-3 relative">
+                  <div className="bg-[#03302F] p-3 rounded-full w-fit mx-auto mb-3">
                     <Globe className="w-6 h-6 text-white" />
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#68DEC4] rounded-full"></div>
                   </div>
                   <h3 className="font-semibold text-sm">Google Translate</h3>
                   <p className={`text-xs ${mutedText}`}>13+ Kenyan languages</p>
@@ -1294,186 +1318,210 @@ How can I assist you today? You can ask questions, upload images, or use voice c
             </div>
 
             {/* Chat */}
-            <Card className={`h-[500px] flex flex-col ${cardCls}`}>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Bot className="w-5 h-5 text-[#02595A]" />
-                  {translatedTitle}
-                  {isSpeaking && <Volume2 className="w-4 h-4 animate-pulse text-[#02595A]" />}
-                  {aiStatus.medical === "processing" && <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />}
-                </CardTitle>
-              </CardHeader>
+            <div className="relative pt-4 pb-3">
+              <FloatPill darkMode={darkMode} className="top-0 left-4 text-[#FD7963]">
+                999 / 112 SOS
+              </FloatPill>
+              <FloatPill darkMode={darkMode} className={`-bottom-0 right-6 ${darkMode ? "text-white" : "text-[#02595A]"}`}>
+                Voice or text
+              </FloatPill>
 
-              <CardContent className="flex-1 overflow-y-auto space-y-4 pb-4">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex gap-3 ${message.type === "user" ? "justify-end" : "justify-start"}`}
-                  >
-                    {message.type === "assistant" && (
-                      <Avatar className={`w-8 h-8 ${BRAND_GRADIENT}`}>
-                        <AvatarFallback className="text-white text-xs bg-transparent">
-                          {message.isAI ? "🤖" : "AI"}
-                        </AvatarFallback>
-                      </Avatar>
-                    )}
-
-                    <div className={`max-w-[80%] ${message.type === "user" ? "order-first" : ""}`}>
-                      <div
-                        className={`rounded-lg p-3 ${
-                          message.type === "user"
-                            ? `${BRAND_GRADIENT} text-white ml-auto`
-                            : message.isError
-                              ? "bg-red-100 text-red-800 border border-red-200"
-                              : darkMode
-                                ? "bg-gray-700 text-gray-100"
-                                : "bg-gray-100 text-gray-900"
-                        }`}
-                      >
-                        {message.image && (
-                          <img
-                            src={message.image || "/placeholder.svg"}
-                            alt="Uploaded"
-                            className="max-w-full h-32 object-cover rounded mb-2"
-                          />
-                        )}
-                        {typeof message.content === "object" && message.content.steps ? (
-                          <FirstAidInstructions data={message.content} darkMode={darkMode} />
-                        ) : (
-                          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                        )}
-
-                        <div className="flex gap-2 mt-2 flex-wrap">
-                          {message.isVoice && (
-                            <Badge variant="secondary" className="text-xs">
-                              <Mic className="w-3 h-3 mr-1" />
-                              Voice Message
-                            </Badge>
-                          )}
-                          {message.isAI && (
-                            <Badge variant="outline" className="text-xs">
-                              <Bot className="w-3 h-3 mr-1" />
-                              AI Powered
-                            </Badge>
-                          )}
-                          {message.confidence && (
-                            <Badge variant="secondary" className="text-xs">
-                              {Math.round(message.confidence * 100)}% Confidence
-                            </Badge>
-                          )}
-                          {message.urgencyLevel === "high" && (
-                            <Badge variant="destructive" className="text-xs">
-                              <AlertTriangle className="w-3 h-3 mr-1" />
-                              High Urgency
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <p className={`text-xs mt-1 px-1 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
-                        {message.timestamp.toLocaleTimeString()}
-                      </p>
-                    </div>
-
-                    {message.type === "user" && (
-                      <Avatar className="w-8 h-8 bg-[#FD7963]">
-                        <AvatarFallback className="text-white text-xs bg-transparent">You</AvatarFallback>
-                      </Avatar>
-                    )}
-                  </div>
-                ))}
-
-                {isLoading && (
-                  <div className="flex gap-3 justify-start">
-                    <Avatar className={`w-8 h-8 ${BRAND_GRADIENT}`}>
-                      <AvatarFallback className="text-white text-xs bg-transparent">🤖</AvatarFallback>
-                    </Avatar>
-                    <div className={`rounded-lg p-3 ${darkMode ? "bg-gray-700" : "bg-gray-100"}`}>
-                      <div className="flex items-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm">{t.analyzing}</span>
+              <Card className={`h-[560px] flex flex-col ${cardCls}`}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <img src={logo} alt={translatedTitle} className="h-10 w-10 object-contain" />
+                      <div>
+                        <CardTitle className="text-base font-bold">AfyaBuddy</CardTitle>
+                        <p className="text-xs font-semibold text-[#2BA58A] flex items-center gap-1">
+                          {isLoading ? "Thinking..." : isSpeaking ? "Speaking..." : "Online, responds instantly"}
+                          {isSpeaking && <Volume2 className="w-3 h-3 animate-pulse" />}
+                        </p>
                       </div>
                     </div>
-                  </div>
-                )}
-              </CardContent>
-
-              <Separator />
-
-              {/* Input area */}
-              <div className="p-4">
-                {uploadedImage && (
-                  <div className="mb-3 relative inline-block">
-                    <img
-                      src={uploadedImage || "/placeholder.svg"}
-                      alt="Preview"
-                      className="h-20 w-20 object-cover rounded border"
-                    />
                     <Button
                       size="sm"
-                      variant="destructive"
-                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
-                      onClick={() => setUploadedImage(null)}
+                      onClick={() => window.open(`tel:${EMERGENCY_NUMBER}`, "_self")}
+                      className="rounded-full bg-[#FD7963] hover:bg-[#f2644d] text-white font-bold px-4"
                     >
-                      ×
+                      SOS
                     </Button>
-                    <Badge className="absolute bottom-0 left-0 text-xs">
-                      <Eye className="w-3 h-3 mr-1" />
-                      AI Ready
-                    </Badge>
                   </div>
-                )}
+                  <Separator className="mt-3" />
+                </CardHeader>
 
-                <form onSubmit={handleSubmit} className="flex gap-2">
-                  <Input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder={t.placeholder}
-                    className="flex-1"
-                    disabled={isLoading}
-                  />
+                <CardContent className="flex-1 overflow-y-auto space-y-4 pb-4">
+                  {messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`flex gap-3 ${message.type === "user" ? "justify-end" : "justify-start"}`}
+                    >
+                      {message.type === "assistant" && (
+                        <Avatar className={`w-8 h-8 ${BRAND_GRADIENT}`}>
+                          <AvatarFallback className="text-white text-xs bg-transparent">
+                            {message.isAI ? "🤖" : "AI"}
+                          </AvatarFallback>
+                        </Avatar>
+                      )}
 
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleImageUpload}
-                    accept="image/*"
-                    className="hidden"
-                  />
+                      <div className={`max-w-[80%] ${message.type === "user" ? "order-first" : ""}`}>
+                        <div
+                          className={`px-4 py-3 text-sm font-medium ${
+                            message.type === "user"
+                              ? "bg-[#02595A] text-white ml-auto rounded-3xl rounded-br-md"
+                              : message.isError
+                                ? "bg-[#FFE8E3] text-[#7a2e1f] border border-[#FD7963]/40 rounded-3xl rounded-bl-md"
+                                : darkMode
+                                  ? "bg-gray-700 text-gray-100 rounded-3xl rounded-bl-md"
+                                  : "bg-[#DDF5EE] text-[#17302C] rounded-3xl rounded-bl-md"
+                          }`}
+                        >
+                          {message.image && (
+                            <img
+                              src={message.image || "/placeholder.svg"}
+                              alt="Uploaded"
+                              className="max-w-full h-32 object-cover rounded mb-2"
+                            />
+                          )}
+                          {typeof message.content === "object" && message.content.steps ? (
+                            <FirstAidInstructions data={message.content} darkMode={darkMode} />
+                          ) : (
+                            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                          )}
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isLoading}
-                    title="AI Image Analysis"
-                  >
-                    <Upload className="w-4 h-4" />
-                  </Button>
+                          <div className="flex gap-2 mt-2 flex-wrap">
+                            {message.isVoice && (
+                              <Badge variant="secondary" className="text-xs">
+                                <Mic className="w-3 h-3 mr-1" />
+                                Voice Message
+                              </Badge>
+                            )}
+                            {message.isAI && (
+                              <Badge variant="outline" className="text-xs">
+                                <Bot className="w-3 h-3 mr-1" />
+                                AI Powered
+                              </Badge>
+                            )}
+                            {message.confidence && (
+                              <Badge variant="secondary" className="text-xs">
+                                {Math.round(message.confidence * 100)}% Confidence
+                              </Badge>
+                            )}
+                            {message.urgencyLevel === "high" && (
+                              <Badge variant="destructive" className="text-xs">
+                                <AlertTriangle className="w-3 h-3 mr-1" />
+                                High Urgency
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <p className={`text-xs mt-1 px-1 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                          {message.timestamp.toLocaleTimeString()}
+                        </p>
+                      </div>
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={startVoiceRecognition}
-                    disabled={isLoading || isListening}
-                    className={isListening ? "animate-pulse bg-red-500 text-white" : ""}
-                    title="AI Voice Recognition"
-                  >
-                    {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                  </Button>
+                      {message.type === "user" && (
+                        <Avatar className="w-8 h-8 bg-[#FD7963]">
+                          <AvatarFallback className="text-white text-xs bg-transparent">You</AvatarFallback>
+                        </Avatar>
+                      )}
+                    </div>
+                  ))}
 
-                  <Button
-                    type="submit"
-                    disabled={isLoading || (!input.trim() && !uploadedImage)}
-                    className={`${BRAND_GRADIENT} ${BRAND_GRADIENT_HOVER} text-white`}
-                    title="Send to AI"
-                  >
-                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  </Button>
-                </form>
-              </div>
-            </Card>
+                  {isLoading && (
+                    <div className="flex gap-3 justify-start">
+                      <Avatar className={`w-8 h-8 ${BRAND_GRADIENT}`}>
+                        <AvatarFallback className="text-white text-xs bg-transparent">🤖</AvatarFallback>
+                      </Avatar>
+                      <div className={`rounded-3xl rounded-bl-md px-4 py-3 ${darkMode ? "bg-gray-700" : "bg-[#DDF5EE]"}`}>
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span className="text-sm">{t.analyzing}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+
+                <Separator />
+
+                {/* Input area */}
+                <div className="p-4">
+                  {uploadedImage && (
+                    <div className="mb-3 relative inline-block">
+                      <img
+                        src={uploadedImage || "/placeholder.svg"}
+                        alt="Preview"
+                        className="h-20 w-20 object-cover rounded-2xl border"
+                      />
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
+                        onClick={() => setUploadedImage(null)}
+                      >
+                        ×
+                      </Button>
+                      <Badge className="absolute bottom-0 left-0 text-xs">
+                        <Eye className="w-3 h-3 mr-1" />
+                        AI Ready
+                      </Badge>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleSubmit} className="flex gap-2">
+                    <Input
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder={t.placeholder}
+                      className={`flex-1 rounded-full px-5 ${darkMode ? "" : "bg-[#F1FAF7] border-[#DDF5EE]"}`}
+                      disabled={isLoading}
+                    />
+
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleImageUpload}
+                      accept="image/*"
+                      className="hidden"
+                    />
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isLoading}
+                      title="AI Image Analysis"
+                      className="rounded-full"
+                    >
+                      <Upload className="w-4 h-4" />
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={startVoiceRecognition}
+                      disabled={isLoading || isListening}
+                      className={`rounded-full ${isListening ? "animate-pulse bg-[#FD7963] text-white" : ""}`}
+                      title="AI Voice Recognition"
+                    >
+                      {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    </Button>
+
+                    <Button
+                      type="submit"
+                      disabled={isLoading || (!input.trim() && !uploadedImage)}
+                      className="rounded-full bg-[#03302F] hover:bg-[#02595A] text-white"
+                      title="Send to AI"
+                    >
+                      {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    </Button>
+                  </form>
+                </div>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* ---------------- CLINICS TAB ---------------- */}
@@ -1482,14 +1530,14 @@ How can I assist you today? You can ask questions, upload images, or use voice c
               <div className="space-y-4">
                 <div className="flex items-center gap-2 mb-4">
                   <Bot className="w-5 h-5 text-[#02595A]" />
-                  <h3 className="text-lg font-semibold">AI-Recommended Healthcare Facilities</h3>
+                  <h3 className="text-xl font-extrabold">AI-Recommended Healthcare Facilities</h3>
                   <Badge variant="outline" className="text-xs">
                     Powered by Google Maps
                   </Badge>
                 </div>
 
                 {nearbyClinics.map((clinic) => (
-                  <Card key={clinic.id} className={`hover:shadow-lg transition-all duration-300 ${cardCls}`}>
+                  <Card key={clinic.id} className={`transition-transform duration-200 hover:-translate-y-0.5 ${cardCls}`}>
                     <CardContent className="p-6">
                       <div className="flex justify-between items-start mb-4">
                         <div className="flex-1">
@@ -1522,7 +1570,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
 
                           {clinic.aiRecommendation && (
                             <Alert
-                              className={`mt-3 ${darkMode ? "bg-[#02595A]/20 border-[#0a7a77]" : "bg-[#effaf7] border-[#68DEC4]"}`}
+                              className={`mt-3 rounded-2xl ${darkMode ? "bg-[#02595A]/20 border-[#0a7a77]" : "bg-[#DDF5EE] border-[#BFE9DD]"}`}
                             >
                               <Bot className="h-4 w-4 text-[#02595A]" />
                               <AlertDescription className={`text-sm ${darkMode ? "text-[#68DEC4]" : "text-[#02595A]"}`}>
@@ -1544,7 +1592,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                           size="sm"
                           variant="outline"
                           onClick={() => window.open(`tel:${clinic.phone}`, "_self")}
-                          className="flex items-center gap-1"
+                          className="flex items-center gap-1 rounded-full"
                         >
                           <Phone className="w-3 h-3" />
                           Call
@@ -1558,7 +1606,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                               : encodeURIComponent(clinic.address)
                             window.open(`https://www.google.com/maps/dir/?api=1&destination=${destination}`, "_blank")
                           }}
-                          className="flex items-center gap-1"
+                          className="flex items-center gap-1 rounded-full"
                         >
                           <Navigation className="w-3 h-3" />
                           Directions
@@ -1566,7 +1614,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                         <Button
                           size="sm"
                           variant="outline"
-                          className="flex items-center gap-1"
+                          className="flex items-center gap-1 rounded-full"
                           onClick={() => {
                             const shareData = {
                               title: clinic.name,
@@ -1594,18 +1642,18 @@ How can I assist you today? You can ask questions, upload images, or use voice c
               <Card className={cardCls}>
                 <CardContent className="p-8 text-center">
                   <Bot className="w-16 h-16 mx-auto mb-4 text-[#02595A]" />
-                  <h3 className="text-lg font-semibold mb-2">AI-Powered Clinic Finder</h3>
+                  <h3 className="text-xl font-extrabold mb-2">AI-Powered Clinic Finder</h3>
                   <p className={`${mutedText} mb-4`}>
                     Allow location access to let our AI discover and recommend the best medical facilities near you
                   </p>
-                  {location.error && <p className="text-sm text-red-600 mb-4">{location.error}</p>}
+                  {location.error && <p className="text-sm text-[#E0543D] mb-4">{location.error}</p>}
                   <Button
                     onClick={getCurrentLocation}
                     disabled={location.loading}
-                    className={`mx-auto flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
+                    className={`mx-auto flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold transition-all duration-200 ${
                       location.loading
                         ? "bg-gradient-to-r from-[#02595A]/50 to-[#68DEC4]/50 text-gray-100 cursor-not-allowed"
-                        : `${BRAND_GRADIENT} ${BRAND_GRADIENT_HOVER} text-white`
+                        : "bg-[#03302F] hover:bg-[#02595A] text-white"
                     }`}
                   >
                     {location.loading ? (
@@ -1624,7 +1672,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
           <TabsContent value="achievements" className="space-y-6">
             <div className="flex items-center gap-2 mb-4">
               <Bot className="w-5 h-5 text-[#02595A]" />
-              <h3 className="text-lg font-semibold">{t.achievements}</h3>
+              <h3 className="text-xl font-extrabold">{t.achievements}</h3>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1656,11 +1704,11 @@ How can I assist you today? You can ask questions, upload images, or use voice c
             </div>
           </TabsContent>
 
-          {/* ---------------- EMERGENCY TAB (stays red on purpose) ---------------- */}
+          {/* ---------------- EMERGENCY TAB ---------------- */}
           <TabsContent value="emergency" className="space-y-6">
             <Card className={cardCls}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-xl font-extrabold">
                   <Users className="w-5 h-5" />
                   {t.emergencyContacts}
                 </CardTitle>
@@ -1675,7 +1723,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                     {emergencyContacts.map((contact) => (
                       <div
                         key={contact.id}
-                        className="flex items-center justify-between gap-3 p-4 rounded-lg bg-gradient-to-r from-red-500/10 to-pink-500/10"
+                        className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-[#FD7963]/10"
                       >
                         <div className="min-w-0">
                           <h3 className="font-semibold truncate">{contact.name}</h3>
@@ -1686,7 +1734,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                           <Button
                             size="sm"
                             onClick={() => window.open(`tel:${contact.phone.replace(/[^\d+]/g, "")}`, "_self")}
-                            className="flex items-center gap-1 font-semibold bg-gradient-to-r from-red-500 to-pink-500 text-white hover:from-red-600 hover:to-pink-600"
+                            className="flex items-center gap-1 rounded-full font-semibold bg-[#FD7963] hover:bg-[#f2644d] text-white"
                           >
                             <Phone className="w-4 h-4" />
                             Call
@@ -1694,6 +1742,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                           <Button
                             size="sm"
                             variant="outline"
+                            className="rounded-full"
                             onClick={() => removeContact(contact.id)}
                             aria-label={`Remove ${contact.name}`}
                           >
@@ -1714,26 +1763,29 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <Input
+                      className="rounded-full px-5"
                       placeholder="Full name"
                       value={newContact.name}
                       onChange={(e) => setNewContact((p) => ({ ...p, name: e.target.value }))}
                     />
                     <Input
+                      className="rounded-full px-5"
                       type="tel"
                       placeholder="Phone, e.g. +254 712 345678"
                       value={newContact.phone}
                       onChange={(e) => setNewContact((p) => ({ ...p, phone: e.target.value }))}
                     />
                     <Input
+                      className="rounded-full px-5"
                       placeholder="Relationship, e.g. Mother"
                       value={newContact.relation}
                       onChange={(e) => setNewContact((p) => ({ ...p, relation: e.target.value }))}
                     />
                   </div>
-                  {contactError && <p className="text-sm text-red-600">{contactError}</p>}
+                  {contactError && <p className="text-sm text-[#E0543D]">{contactError}</p>}
                   <Button
                     type="submit"
-                    className={`flex items-center gap-2 ${BRAND_GRADIENT} ${BRAND_GRADIENT_HOVER} text-white`}
+                    className="flex items-center gap-2 rounded-full bg-[#03302F] hover:bg-[#02595A] text-white"
                   >
                     <UserPlus className="w-4 h-4" />
                     Save contact
@@ -1745,13 +1797,13 @@ How can I assist you today? You can ask questions, upload images, or use voice c
 
             <Card className={cardCls}>
               <CardHeader>
-                <CardTitle>Quick Emergency Actions</CardTitle>
+                <CardTitle className="text-xl font-extrabold">Quick Emergency Actions</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Button
                     size="lg"
-                    className="flex items-center justify-center gap-3 h-20 px-8 py-6 rounded-xl font-bold text-lg bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-lg hover:from-red-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-red-400 transition-all duration-200"
+                    className="flex items-center justify-center gap-3 h-20 px-8 py-6 rounded-full font-bold text-lg bg-[#FD7963] hover:bg-[#f2644d] text-white shadow-lg focus:outline-none focus:ring-2 focus:ring-[#FD7963]/50 transition-all duration-200"
                     onClick={() => window.open(`tel:${EMERGENCY_NUMBER}`, "_self")}
                   >
                     <Phone className="w-6 h-6 mr-2" />
@@ -1760,7 +1812,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                   <Button
                     size="lg"
                     variant="outline"
-                    className="flex items-center justify-center gap-3 h-20 px-8 py-6 rounded-xl font-bold text-lg border-2 border-[#02595A] text-[#02595A] bg-gradient-to-r from-[#effaf7] to-white hover:from-[#68DEC4]/30 hover:to-[#effaf7] focus:outline-none focus:ring-2 focus:ring-[#68DEC4] transition-all duration-200"
+                    className="flex items-center justify-center gap-3 h-20 px-8 py-6 rounded-full font-bold text-lg border-2 border-[#02595A] text-[#02595A] bg-gradient-to-r from-[#effaf7] to-white hover:from-[#68DEC4]/30 hover:to-[#effaf7] focus:outline-none focus:ring-2 focus:ring-[#68DEC4] transition-all duration-200"
                     onClick={shareLiveLocation}
                   >
                     <Share2 className="w-6 h-6 mr-2" />
@@ -1780,7 +1832,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
 
             <Card className={cardCls}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-xl font-extrabold">
                   <Brain className="w-5 h-5 text-[#02595A]" />
                   TensorFlow Real-time Health Analysis
                   {aiStatus.facial === "processing" && <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />}
@@ -1793,7 +1845,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                     <Button
                       onClick={startFacialAnalysis}
                       disabled={isAnalyzingFace}
-                      className={`w-full flex-1 min-h-[160px] flex flex-col items-center justify-center gap-3 text-base ${BRAND_GRADIENT} ${BRAND_GRADIENT_HOVER} text-white`}
+                      className="w-full flex-1 min-h-[160px] flex flex-col items-center justify-center gap-3 text-base rounded-3xl bg-[#03302F] hover:bg-[#02595A] text-white"
                     >
                       {isAnalyzingFace ? (
                         <>
@@ -1811,7 +1863,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
 
                   {/* RIGHT: results */}
                   <div className="space-y-4">
-                    <div className="p-4 rounded-lg bg-gradient-to-r from-[#FD7963]/10 to-orange-500/10">
+                    <div className={`p-4 rounded-2xl ${darkMode ? "bg-gray-700/50" : "bg-[#DDF5EE]"}`}>
                       <h4 className="font-semibold mb-2 flex items-center gap-2">
                         <Bot className="w-4 h-4" />
                         AI Stress Level
@@ -1822,7 +1874,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                       </p>
                     </div>
 
-                    <div className="p-4 rounded-lg bg-gradient-to-r from-yellow-500/10 to-[#FD7963]/10">
+                    <div className={`p-4 rounded-2xl ${darkMode ? "bg-gray-700/50" : "bg-[#DDF5EE]"}`}>
                       <h4 className="font-semibold mb-2 flex items-center gap-2">
                         <Bot className="w-4 h-4" />
                         AI Pain Detection
@@ -1833,7 +1885,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                       </p>
                     </div>
 
-                    <div className="p-4 rounded-lg bg-gradient-to-r from-[#68DEC4]/20 to-[#02595A]/10">
+                    <div className={`p-4 rounded-2xl ${darkMode ? "bg-gray-700/50" : "bg-[#DDF5EE]"}`}>
                       <h4 className="font-semibold mb-2 flex items-center gap-2">
                         <Bot className="w-4 h-4" />
                         AI Wellness Score
@@ -1852,7 +1904,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
             {/* Health predictions */}
             <Card className={cardCls}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-xl font-extrabold">
                   <Snowflake className="w-5 h-5 text-[#02595A]" />
                   Health Predictions (demo)
                 </CardTitle>
@@ -1860,7 +1912,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
               <CardContent>
                 <div className="space-y-4">
                   {healthPredictions.map((prediction, index) => (
-                    <div key={index} className="p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <div key={index} className="p-4 rounded-2xl border border-[#E4F1EC] dark:border-gray-700">
                       <div className="flex justify-between items-start mb-2">
                         <h4 className="font-semibold flex items-center gap-2">
                           <Bot className="w-4 h-4" />
@@ -1887,7 +1939,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                 </div>
                 <Button
                   onClick={startAIHealthCoach}
-                  className={`w-full mt-6 flex items-center justify-center gap-2 px-8 py-6 text-base font-semibold ${BRAND_GRADIENT} ${BRAND_GRADIENT_HOVER} text-white`}
+                  className="w-full mt-6 flex items-center justify-center gap-2 px-8 py-6 text-base font-semibold rounded-full bg-[#03302F] hover:bg-[#02595A] text-white"
                 >
                   <Brain className="w-5 h-5" />
                   Activate AI Health Coach
@@ -1898,7 +1950,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
             {aiCoachMessages.length > 0 && (
               <Card className={cardCls}>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 text-xl font-extrabold">
                     <Bell className="w-5 h-5 text-[#FD7963]" />
                     AI Coach Messages
                   </CardTitle>
@@ -1908,7 +1960,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                     {aiCoachMessages.map((message, index) => (
                       <Alert
                         key={index}
-                        className={darkMode ? "bg-yellow-900/20 border-yellow-700" : "bg-yellow-50 border-yellow-200"}
+                        className={`rounded-2xl ${darkMode ? "bg-yellow-900/20 border-yellow-700" : "bg-yellow-50 border-yellow-200"}`}
                       >
                         <Bot className="h-4 w-4 text-yellow-600" />
                         <AlertDescription className={darkMode ? "text-yellow-300" : "text-yellow-800"}>
@@ -1924,7 +1976,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
             {environmentalAlerts.length > 0 && (
               <Card className={cardCls}>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 text-xl font-extrabold">
                     <AlertTriangle className="w-5 h-5 text-orange-500" />
                     Environmental Alerts
                   </CardTitle>
@@ -1934,7 +1986,7 @@ How can I assist you today? You can ask questions, upload images, or use voice c
                     {environmentalAlerts.map((alertText, index) => (
                       <Alert
                         key={index}
-                        className={darkMode ? "bg-orange-900/20 border-orange-700" : "bg-orange-50 border-orange-200"}
+                        className={`rounded-2xl ${darkMode ? "bg-orange-900/20 border-orange-700" : "bg-orange-50 border-orange-200"}`}
                       >
                         <Bot className="h-4 w-4 text-orange-600" />
                         <AlertDescription className={darkMode ? "text-orange-300" : "text-orange-800"}>
