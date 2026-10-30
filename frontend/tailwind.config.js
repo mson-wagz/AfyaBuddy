@@ -1,3 +1,7 @@
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+
 // tailwind.config.js
 export const content = [
   "./index.html",
