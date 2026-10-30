@@ -1,0 +1,16 @@
+@import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap');
+
+body {
+  font-family: 'Nunito', system-ui, sans-serif;
+}
+
+h1, h2, h3, h4,
+.font-bold,
+.font-semibold {
+  font-family: 'M PLUS Rounded 1c', 'Nunito', sans-serif;
+  letter-spacing: -0.01em;
+}
+
+input, textarea, select, button {
+  font-family: 'Nunito', system-ui, sans-serif;
+}
